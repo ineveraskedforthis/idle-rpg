@@ -14,7 +14,7 @@ return function (render, rx, ry, rw, rh)
 		love.graphics.setColor(0, 0, 0, 1)
 		love.graphics.rectangle("line", rx + 1, ry + 1, rw - 2, rh - 2, 2, 2)
 
-		love.graphics.setColor(1, 0, 0, 1)
+		love.graphics.setColor(0.5, 0, 0, 1)
 		love.graphics.rectangle("line", rx + 3, ry + 3, rw - 6, rh - 6, 2, 2)
 	end
 	return false

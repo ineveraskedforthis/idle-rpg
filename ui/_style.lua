@@ -17,7 +17,7 @@ end
 -- local default_font = font_by_size[1]
 local default_font = love.graphics.newFont(readable_font, 16)
 local conversation_font = love.graphics.newFont("assets/Baskervville/static/Baskervville-Italic.ttf", 16)
-local header_font = love.graphics.newFont(readable_font, math.floor(16 * 1.618))
+local header_font = love.graphics.newFont(readable_font, math.floor(12 * 1.618))
 
 return {
 	battle_actors_spacing = 120,
@@ -41,7 +41,7 @@ return {
 	end,
 
 	active_element_border = function ()
-		love.graphics.setColor(0.9, 0.4, 0.1, 1)
+		love.graphics.setColor(0.9, 0.5, 0.2, 1)
 	end,
 
 	active_element_bg_passive = function ()
@@ -50,6 +50,10 @@ return {
 
 	panel_bg = function ()
 		love.graphics.setColor(0.9, 0.9, 0.9, 0.95)
+	end,
+
+	dark_panel_bg = function ()
+		love.graphics.setColor(0.1, 0.05, 0.05, 0.95)
 	end,
 
 	active_element_bg_hover = function ()
