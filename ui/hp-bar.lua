@@ -6,7 +6,6 @@ local function gradient_h(colors)
 	local result = love.image.newImageData(#colors, 1)
 	for i, color in ipairs(colors) do
 		local x, y = i - 1, 0
-		print(x, y)
 		result:setPixel(x, y, color[1], color[2], color[3], color[4] or 1)
 	end
 	local result_image = love.graphics.newImage(result)
@@ -33,7 +32,6 @@ local hp_gradient_enemy = gradient_h({{0.95, 0.1, 0.05}, {1, 0.11, 0.05}})
 ---@param hostile boolean
 ---@param level number?
 return function (x, y, w, h, hp, hp_view, max_hp, shield, hostile, level)
-	-- print(hp, hp_view)
 	local outerouter = 1
 	local outer = 1
 	local shield_offset = 1

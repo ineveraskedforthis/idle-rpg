@@ -1,3 +1,7 @@
+local basic_attack = require "skills.melee-attack"
+local comet = require "skills.comet"
+local aoe = require "effect.aoe-flat"
+
 function CLAMP(x, a, b)
 	if (x < a) then
 		return a
@@ -57,9 +61,12 @@ local blood_ground_image = love.graphics.newImage("blood-ground.png")
 ---@field position number
 ---@field image love.Image
 
----@type Particle[]
-local  particles = {}
-
+---@class VFX
+---@field particles Particle[]
+---@type VFX
+local vfx_manager = {
+	particles = {}
+}
 for i = 1, 100 do
 	---@type Particle
 	local particle = {
@@ -69,21 +76,10 @@ for i = 1, 100 do
 		time_left = 0,
 		max_time = 1
 	}
-	table.insert(particles, particle)
+	table.insert(vfx_manager.particles, particle)
 end
 
-local function insert_particle(pos, size, image, time)
-	for index, value in ipairs(particles) do
-		if value.time_left <= 0 then
-			value.image = image
-			value.position = pos
-			value.size = size
-			value.time_left = time
-			value.max_time = time
-			return
-		end
-	end
-end
+
 
 ---@type number
 local timer = 0
@@ -92,9 +88,34 @@ local hp = 10
 local hp_view = 10
 local max_hp = 15
 local shield = 20
-local stage_distance = 0
 local speed = 0.2
-local damage = 1
+
+---@enum SkillEnum
+SkillEnum = {
+	BasicAttack = 1,
+	Comet = 2,
+}
+
+---@class PlayerState
+---@field attack_range number
+---@field melee_damage number
+---@field spell_damage number
+---@field items Item[]
+---@field weapon number|nil
+---@field boots number|nil
+---@field exp number
+---@field level number
+---@field current_action SkillEnum?
+
+---@type PlayerState
+local player_state = {
+	attack_range = 0,
+	items = {},
+	melee_damage = 0,
+	spell_damage = 0,
+	exp = 0,
+	level = 0
+}
 
 ---@type ActorModelState
 local player_model = {
@@ -108,36 +129,58 @@ local level = 1
 local magic_dust = 0
 
 local function display_stats(render, x, y)
-	panel(render, x, y, 120, 100 )
+	panel(render, x, y, 160, 130 )
 	if render then
 		love.graphics.print("Max HP: " .. tostring(max_hp), x + 10, y + 10)
 		love.graphics.print("Shield: " .. tostring(shield), x + 10, y + 30)
 		love.graphics.print("Speed: " .. tostring(speed), x + 10, y + 50)
-		love.graphics.print("Damage: " .. tostring(damage), x + 10, y + 70)
+		love.graphics.print("Melee damage: " .. tostring(player_state.melee_damage), x + 10, y + 70)
+		love.graphics.print("Spell damage: " .. tostring(player_state.spell_damage), x + 10, y + 90)
 	end
 end
 
-local weapon = nil
-local boots = nil
-
-local is_attacking = false
--- local attack_progress = 0
--- local attack_speed = 10
 
 ---@class Enemy
 ---@field hp number
----@field image love.Image
+---@field model ActorModelDescription
 ---@field position number
 ---@field damage number
 ---@field attack_progress number
 ---@field is_attacking boolean
 ---@field being_hit boolean
 ---@field being_hit_animation_progress number
+---@field on_kill_triggered boolean
 
----@type Enemy[]
-local enemies = {}
+---@class ProjectileDescription
+---@field size_x number
+---@field size_y number
+---@field image love.Image
+---@field movement_frames love.Quad[]
+---@field impact_frames love.Quad[]
 
-local item_kinds = 2
+---@class Projectile
+---@field desc ProjectileDescription
+---@field height number
+---@field position number
+---@field target number
+---@field speed number
+---@field size number
+---@field impact boolean
+---@field impact_progress number
+---@field discard boolean
+---@field damage number
+
+---@class Stage
+---@field distance number
+---@field enemies Enemy[]
+---@field projectiles Projectile[]
+
+---@type Stage
+local stage = {
+	distance = 1000,
+	enemies = {},
+	projectiles = {}
+}
 
 ---@enum ItemSlot
 ItemSlot = {
@@ -272,17 +315,18 @@ end
 ---@field prefixes number[]
 ---@field durability number
 
----@type Item[]
-local items = {}
-
-local function get_shield(item)
+---comment
+---@param player PlayerState
+---@param item number
+---@return integer
+local function get_shield(player, item)
 	if item == nil then
 		return 0
 	end
 
 	---@type number
 	local result = 0
-	local w = items[item]
+	local w = player.items[item]
 	local b = BaseItemTable[w.kind]
 	result = result + b.shield
 	for index, value in ipairs(w.prefixes) do
@@ -294,14 +338,18 @@ local function get_shield(item)
 
 	return result
 end
-local function get_damage(item)
+
+---@param player PlayerState
+---@param item number
+---@return integer
+local function get_damage(player,item)
 	if item == nil then
 		return 0
 	end
 
 	---@type number
 	local result = 0
-	local w = items[item]
+	local w = player.items[item]
 	local b = BaseItemTable[w.kind]
 	result = result + b.damage
 	for index, value in ipairs(w.prefixes) do
@@ -313,17 +361,18 @@ local function get_damage(item)
 
 	return result
 end
-local function durability_loss_per_attack(item)
-	return 0.01
-end
-local function get_speed_mod(item)
+
+---@param player PlayerState
+---@param item number
+---@return integer
+local function get_speed_mod(player, item)
 	if item == nil then
 		return 0
 	end
 
 	---@type number
 	local result = 0
-	local w = items[item]
+	local w = player.items[item]
 	local b = BaseItemTable[w.kind]
 	result = result + b.speed_modifier
 	for index, value in ipairs(w.prefixes) do
@@ -335,123 +384,30 @@ local function get_speed_mod(item)
 
 	return result
 end
-local function get_attack_range(item)
-	if item == nil then
-		return 10
-	end
-	local w = items[item]
-	local b = BaseItemTable[w.kind]
-	return b.range
-end
-local function update_damage_and_speed()
-	damage = 1 + get_damage(weapon) + get_damage(boots)
-	speed = 200 * (1 + get_speed_mod(weapon) + get_speed_mod(boots))
-	attack_speed = 2
-	if weapon then
-		attack_speed = BaseItemTable[items[weapon].kind].base_attack_speed
-	end
+
+---@param player PlayerState
+local function update_damage_and_speed(player)
+	player.melee_damage = 1 + get_damage(player, player.weapon)
+	player.spell_damage = 1 + get_damage(player, player.boots)
+	speed = 200 * (1 + get_speed_mod(player, player.weapon) + get_speed_mod(player, player.boots))
 end
 
----comment
----@param rarity number
-local function generate_loot(rarity)
-	---@type Item
-	local item = {
-		kind = math.floor(#BaseItemTable *love.math.random()) + 1,
-		suffixes = {},
-		prefixes = {},
-		durability = 1
-	}
 
-	local mods = rarity
 
-	for i = 1, rarity do
-		---@type number[]
-		local candidates = {}
-		local is_suffix = love.math.random() > 0.5
-		local total_weight = 0
 
-		if is_suffix then
-			for index, value in ipairs(SuffixTable) do
-				table.insert(candidates, index)
-				total_weight = total_weight + 1 / value.rarity
-			end
-			local candidates_count = #candidates
-			if candidates_count == 0 then
-				goto continue
-			end
-			local dice = love.math.random() * total_weight
-			local acc = 0
-			for index, value in ipairs(candidates) do
-				local affix = SuffixTable[value]
-				acc = acc + 1 / affix.rarity
-				if acc >= dice then
-					table.insert(item.suffixes, value)
-					goto continue
-				end
-			end
-		else
-			for index, value in ipairs(PrefixTable) do
-				table.insert(candidates, index)
-				total_weight = total_weight + 1 / value.rarity
-			end
-			local candidates_count = #candidates
-			if candidates_count == 0 then
-				goto continue
-			end
-			local dice = love.math.random() * total_weight
-			local acc = 0
-			for index, value in ipairs(candidates) do
-				local affix = PrefixTable[value]
-				acc = acc + 1 / affix.rarity
-				if acc >= dice then
-					table.insert(item.prefixes, value)
-					goto continue
-				end
-			end
-		end
-		::continue::
-	end
 
-	return item
-end
 
----@param enemy Enemy
-local function on_kill(enemy)
-	if love.math.random() < 0.2 and #items < 15 then
-		local item = generate_loot(love.math.random() * 4 * difficulty)
-		table.insert(items, item)
-	end
-	exp = exp + difficulty
-end
-
-local function deal_damage_area(left_x, right_x, damage_value)
-	for index, value in ipairs(enemies) do
-		if value.position >= left_x and value.position <= right_x and value.hp > 0 then
-			value.hp = value.hp - damage_value
-			if value.hp <= 0 then
-				on_kill(value)
-			end
-			value.being_hit = true
-			value.being_hit_animation_progress = 0
-			value.position = math.min(stage_distance, value.position + 5)
-			insert_particle(value.position + 0.1 * (love.math.random() - 0.5), 1 + love.math.random(), blood_ground_image, 4)
-			insert_particle(value.position + 0.1 * (love.math.random() - 0.5), 0.25 + love.math.random(), blood_hit_image, 0.25)
-		end
-	end
-end
 
 ---@class SkillData
 ---@field progress number
 ---@field completed boolean
 
 ---@type SkillData
-local basic_attack_data = {
+local action_data = {
 	progress = 0,
-	completed = true
+	completed = true,
 }
 
-local basic_attack = {}
 
 ---@class ActorModelDescription
 ---@field size_x number
@@ -467,36 +423,6 @@ local basic_skeleton = {
 	size_y = 40,
 	image = love.graphics.newImage("hero-battle.png")
 }
-
----comment
----@param x number
----@param y number
----@param data SkillData
----@param actor_model ActorModelDescription
----@param actor_position ActorModelState
----@param camera_shift number
-function basic_attack.draw(x, y, data, actor_model, actor_position, camera_shift)
-	local frame = math.floor(data.progress * 4) % 4
-	love.graphics.setColor(1, 1, 1, 1)
-	print(camera_shift + x + actor_position.position + actor_model.size_x / 2, y - actor_model.size_y)
-	love.graphics.draw(hit_image, hit_quads[frame + 1], camera_shift + x + actor_position.position - actor_model.size_x / 2, y - actor_model.size_y)
-end
-
----@param dt number
----@param model ActorModelState
----@param data SkillData
-function basic_attack.update(dt, model, data)
-	local attack_range = get_attack_range(weapon)
-	data.progress = data.progress + dt
-	if data.progress >= 1 then
-		deal_damage_area(model.position, model.position + attack_range, damage)
-		if (weapon) then
-			items[weapon].durability = math.max(0, items[weapon].durability - durability_loss_per_attack(weapon))
-		end
-		data.progress = 0
-		data.completed = true
-	end
-end
 
 ---comment
 ---@param model ActorModelDescription
@@ -548,17 +474,17 @@ local function battle_panel(render, x, y)
 
 	do
 		local frame = (math.floor(timer * 5) + 1) % 5
-		love.graphics.draw(portal_image, portal_quads[frame + 1], base_camera_shift + x + stage_distance - actual_camera, y + 180, 0, 1, 1)
+		love.graphics.draw(portal_image, portal_quads[frame + 1], base_camera_shift + x + stage.distance - actual_camera, y + 180, 0, 1, 1)
 	end
 
-	for index, value in ipairs(particles) do
+	for index, value in ipairs(vfx_manager.particles) do
 		if value.time_left > 0 then
 			love.graphics.setColor(1, 1, 1, value.time_left / value.max_time)
 			love.graphics.draw(value.image, base_camera_shift + x + value.position  - actual_camera, y + 200, 0, value.size, value.size, 40, 40)
 		end
 	end
 
-	for index, value in ipairs(enemies) do
+	for index, value in ipairs(stage.enemies) do
 		if value.hp > 0 then
 			draw_character(x, battle_y, basic_skeleton, { position = value.position}, base_camera_shift - actual_camera)
 		end
@@ -566,17 +492,41 @@ local function battle_panel(render, x, y)
 
 	draw_character(x, battle_y, basic_skeleton, player_model, base_camera_shift - actual_camera)
 
-	if is_attacking then
-		basic_attack.draw(x, battle_y, basic_attack_data, basic_skeleton, player_model, base_camera_shift - actual_camera)
+	if player_state.current_action ==SkillEnum.BasicAttack then
+		basic_attack.draw(x, battle_y, action_data, basic_skeleton, player_model, base_camera_shift - actual_camera)
+	elseif  player_state.current_action == SkillEnum.Comet then
+		comet.draw(x, battle_y, action_data, basic_skeleton, player_model, base_camera_shift - actual_camera)
 	end
 
-	for index, value in ipairs(enemies) do
+	for index, value in ipairs(stage.enemies) do
 		if value.is_attacking then
 			local frame = math.floor(value.attack_progress * 4) % 4
 			love.graphics.setColor(1, 1, 1, 1)
 			love.graphics.draw(
 				hit_image, hit_quads[frame + 1], base_camera_shift + x + value.position - actual_camera + 20, y + 200,
 				0, -1, 1
+			)
+		end
+	end
+
+	for index, value in ipairs(stage.projectiles) do
+		love.graphics.setColor(1, 1, 1, 1)
+		if value.impact and not value.discard then
+			local frame = math.floor(value.impact_progress * #value.desc.impact_frames)
+			love.graphics.draw(
+				value.desc.image,
+				value.desc.impact_frames[frame + 1],
+				base_camera_shift + x + value.position - actual_camera - value.desc.size_x / 2 * value.size * value.impact_progress,
+				battle_y - value.height - value.desc.size_y / 2 * value.size * value.impact_progress,
+				0, value.size * value.impact_progress, value.size * value.impact_progress
+			)
+		elseif not value.discard then
+			local frame = 1
+			love.graphics.draw(
+				value.desc.image,
+				value.desc.movement_frames[frame],
+				base_camera_shift + x + value.position - actual_camera - value.desc.size_x / 2,
+				battle_y - value.height - value.desc.size_y / 2
 			)
 		end
 	end
@@ -631,14 +581,14 @@ local function right_side_panel(render, mx, my)
 	)
 
 	love.graphics.setColor(1, 1, 1)
-	if weapon then
-		local item = items[weapon]
+	if player_state.weapon then
+		local item = player_state.items[player_state.weapon]
 		local img = BaseItemTable[item.kind].image
 		love.graphics.draw(img, window_width - right_panel_width + interface_grid *2, interface_grid * 6, 0, scale, scale)
 	end
 
-	if boots then
-		local item = items[boots]
+	if player_state.boots then
+		local item = player_state.items[player_state.boots]
 		local img = BaseItemTable[item.kind].image
 		love.graphics.draw(img, window_width - interface_grid *8, interface_grid *19, 0, scale, scale)
 	end
@@ -649,7 +599,7 @@ local function right_side_panel(render, mx, my)
 	local x = window_width - right_panel_width + interface_grid + interface_grid
 	local y = interface_grid + equip_image_height + interface_grid + stats_height + interface_grid + interface_grid
 
-	for index, value in ipairs(items) do
+	for index, value in ipairs(player_state.items) do
 		local item_x = x + column * interface_grid * 7
 		local item_y = y + row * interface_grid * 7
 
@@ -678,18 +628,18 @@ local function right_side_panel(render, mx, my)
 		end
 		border(render, item_x, item_y, interface_grid * 6,  interface_grid * 6)
 
-		if weapon == index or boots == index then
+		if player_state.weapon == index or player_state.boots == index then
 			border(render, item_x + 5, item_y + 5, interface_grid * 6 - 10, interface_grid * 6 - 10)
 		end
 
 		if (not render) and rect_detection(item_x, item_y, interface_grid * 6, interface_grid * 6, mx, my) then
 			if BaseItemTable[value.kind].slot ==ItemSlot.Boots then
-				boots = index
+				player_state.boots = index
 			end
 			if BaseItemTable[value.kind].slot ==ItemSlot.Weapon then
-				weapon = index
+				player_state.weapon = index
 			end
-			update_damage_and_speed()
+			update_damage_and_speed(player_state)
 		end
 
 		hp_bar(item_x + 5, item_y + interface_grid * 6 - 10, interface_grid * 6 - 10, 7, value.durability, value.durability, 1, 0, false)
@@ -718,28 +668,30 @@ local function  interface(render, mx, my)
 	character_widget(render, 10, 10)
 	status_bar(render, 210, 10)
 	battle_panel(render, 0, 160)
-	display_stats(render, 630, 400)
 	change_difficulty(render, 110, 10, mx, my)
 
 	right_side_panel(render, mx, my)
+	display_stats(render, 630, 400)
 end
 
 local function generate_enemies()
-	enemies = {}
+	stage.enemies = {}
+	stage.projectiles = {}
 
 	for i = 1, difficulty do
 		---@type Enemy
 		local starting_enemy = {
 			hp = 3 + difficulty,
-			image = hero_battle,
-			position = math.sqrt(love.math.random()) * stage_distance,
+			model = basic_skeleton,
+			position = math.sqrt(love.math.random()) * stage.distance,
 			damage = difficulty,
 			attack_progress = 0,
 			is_attacking = false,
 			being_hit = false,
-			being_hit_animation_progress = 0
+			being_hit_animation_progress = 0,
+			on_kill_triggered = false
 		}
-		table.insert(enemies, starting_enemy)
+		table.insert(stage.enemies, starting_enemy)
 	end
 end
 
@@ -750,6 +702,9 @@ end
 
 local reset_stage = true
 local enemy_speed = 200
+
+---comment
+---@param dt number
 function love.update(dt)
 
 	timer = timer + dt
@@ -760,17 +715,17 @@ function love.update(dt)
 	if (not fade_in) then
 		actual_camera = actual_camera + SMOOTHERSTEP(t) * dt * distance_from_camera * 2
 	elseif hp > 0 then
-		distance_from_camera = stage_distance - actual_camera
+		distance_from_camera = stage.distance - actual_camera
 		actual_camera = actual_camera + SMOOTHERSTEP(t) * dt * distance_from_camera * 2
 	end
 
-	if player_model.position >= stage_distance or hp <= 0 then
+	if player_model.position >= stage.distance or hp <= 0 then
 		reset_stage = true
 		fade_in = true
 		player_model.position = 0
 		hp = max_hp
-		shield = get_shield(weapon) + get_shield(boots)
-		stage_distance = math.sqrt(difficulty) * 1000
+		shield = get_shield(player_state, player_state.weapon) + get_shield(player_state, player_state.boots)
+		stage.distance = math.sqrt(difficulty) * 1000
 	end
 
 	if reset_stage then
@@ -784,7 +739,7 @@ function love.update(dt)
 		else
 			player_model.position = 0
 			reset_stage = false
-			update_damage_and_speed()
+			update_damage_and_speed(player_state)
 			generate_enemies()
 		end
 
@@ -799,21 +754,46 @@ function love.update(dt)
 		end
 	end
 
-	for index, value in ipairs(enemies) do
-		if value.position < player_model.position + get_attack_range(weapon) and value.hp > 0 then
-			is_attacking = true
-			basic_attack_data.completed = false
-			break
-		else
-			is_attacking = false
+	for index, value in ipairs(stage.enemies) do
+		if value.hp <= 0 and not value.on_kill_triggered then
+			value.on_kill_triggered = true
+			require "triggered.on_kill"(player_state, difficulty)
 		end
 	end
 
-	for index, value in ipairs(particles) do
+	for index, value in ipairs(vfx_manager.particles) do
 		value.time_left = value.time_left - dt
 	end
 
-	for index, value in ipairs(enemies) do
+	for index, value in ipairs(stage.projectiles) do
+		if value.discard then
+		elseif value.impact then
+			value.impact_progress = value.impact_progress + dt * 5
+			if value.impact_progress >= 1 then
+				-- do something
+				value.impact_progress = 1
+				value.discard = true
+				aoe(vfx_manager, stage, value.position - value.desc.size_x / 2 * value.size, value.position + value.desc.size_x / 2 * value.size, value.damage)
+			end
+		else
+			local dx = value.target - value.position
+			local dy = -value.height
+			local n = math.sqrt(dx * dx + dy * dy)
+			local true_distance = math.sqrt(dx * dx + dy * dy)
+			local move = value.speed * dt
+			if (move >= true_distance) then
+				value.target = value.position
+				value.height = 0
+				value.impact = true
+				value.impact_progress = 0
+			else
+				value.position = value.position + dx / n * move
+				value.height = value.height + dy / n * move
+			end
+		end
+	end
+
+	for index, value in ipairs(stage.enemies) do
 		if value.being_hit and value.being_hit_animation_progress < 1 then
 			value.being_hit_animation_progress = value.being_hit_animation_progress + dt
 		end
@@ -844,25 +824,50 @@ function love.update(dt)
 	end
 
 
-	if is_attacking then
-		print("attack")
-		basic_attack.update(dt, player_model, basic_attack_data)
-		if basic_attack_data.completed then
-			print("completed")
-			is_attacking = false
+	if player_state.current_action == nil then
+		-- Can we do a basic attack?
+		for index, value in ipairs(stage.enemies) do
+			if value.hp <= 0 then
+				goto continue
+			end
+
+			if value.position < player_model.position + basic_attack.activation_range(player_state) then
+				player_state.current_action = SkillEnum.BasicAttack
+				action_data.completed = false
+				action_data.progress = 0
+				break
+			elseif  value.position < player_model.position + comet.activation_range(player_state) then
+				player_state.current_action = SkillEnum.Comet
+				action_data.completed = false
+				action_data.progress = 0
+				break
+			end
+
+			::continue::
 		end
-	else
 		local move = dt * speed
-		for index, value in ipairs(enemies) do
+		for index, value in ipairs(stage.enemies) do
 			local shift = value.position - player_model.position
 			if shift - 5 <= move and value.hp > 0 then
 				move = shift - 4
 			end
 		end
 		player_model.position = player_model.position + move
+	elseif player_state.current_action ==SkillEnum.BasicAttack then
+		basic_attack.update(vfx_manager, stage, player_state, dt, player_model, action_data)
+		if action_data.completed then
+			action_data.progress = 0
+			action_data.completed = false
+			player_state.current_action = nil
+		end
+	elseif player_state.current_action ==SkillEnum.Comet then
+		comet.update(vfx_manager, stage, player_state, dt, player_model, action_data)
+		if action_data.completed then
+			action_data.progress = 0
+			action_data.completed = false
+			player_state.current_action = nil
+		end
 	end
-
-
 
 	local decay = math.exp(-dt * 10)
 	hp_view = hp_view * decay + hp * (1 - decay)
