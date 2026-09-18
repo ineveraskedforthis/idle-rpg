@@ -718,6 +718,7 @@ function love.update(dt)
 		distance_from_camera = stage.distance - actual_camera
 		actual_camera = actual_camera + SMOOTHERSTEP(t) * dt * distance_from_camera * 2
 	end
+	actual_camera = math.min(actual_camera, stage.distance - 600)
 
 	if player_model.position >= stage.distance or hp <= 0 then
 		reset_stage = true
