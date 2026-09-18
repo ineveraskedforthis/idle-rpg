@@ -85,8 +85,6 @@ local function insert_particle(pos, size, image, time)
 	end
 end
 
-local hero_battle = love.graphics.newImage("hero-battle.png")
-
 ---@type number
 local timer = 0
 
@@ -94,10 +92,14 @@ local hp = 10
 local hp_view = 10
 local max_hp = 15
 local shield = 20
-local progress = 0
 local stage_distance = 0
 local speed = 0.2
 local damage = 1
+
+---@type ActorModelState
+local player_model = {
+	position = 0
+}
 
 local difficulty = 1
 
@@ -119,8 +121,8 @@ local weapon = nil
 local boots = nil
 
 local is_attacking = false
-local attack_progress = 0
-local attack_speed = 10
+-- local attack_progress = 0
+-- local attack_speed = 10
 
 ---@class Enemy
 ---@field hp number
@@ -158,6 +160,7 @@ ItemImageSize = {
 ---@field base_attack_speed number
 ---@field shield number
 ---@field slot ItemSlot
+---@field range number
 ---@field image_kind ItemImageSize
 
 ---@type ItemKind[]
@@ -172,6 +175,7 @@ local function register_weapon(name, image, damage, base_attack_speed, speed_mod
 		base_attack_speed = base_attack_speed,
 		slot = ItemSlot.Weapon,
 		speed_modifier = speed_modifier,
+		range = 10,
 		shield = 0,
 		image_kind = ItemImageSize.Large
 	}
@@ -187,6 +191,7 @@ local function register_boots(name, image, speed_modifier, base_shield)
 		damage = 0,
 		base_attack_speed = 0,
 		slot = ItemSlot.Boots,
+		range = 0,
 		speed_modifier = speed_modifier,
 		shield = base_shield,
 		image_kind = ItemImageSize.Medium
@@ -330,6 +335,14 @@ local function get_speed_mod(item)
 
 	return result
 end
+local function get_attack_range(item)
+	if item == nil then
+		return 10
+	end
+	local w = items[item]
+	local b = BaseItemTable[w.kind]
+	return b.range
+end
 local function update_damage_and_speed()
 	damage = 1 + get_damage(weapon) + get_damage(boots)
 	speed = 200 * (1 + get_speed_mod(weapon) + get_speed_mod(boots))
@@ -339,6 +352,161 @@ local function update_damage_and_speed()
 	end
 end
 
+---comment
+---@param rarity number
+local function generate_loot(rarity)
+	---@type Item
+	local item = {
+		kind = math.floor(#BaseItemTable *love.math.random()) + 1,
+		suffixes = {},
+		prefixes = {},
+		durability = 1
+	}
+
+	local mods = rarity
+
+	for i = 1, rarity do
+		---@type number[]
+		local candidates = {}
+		local is_suffix = love.math.random() > 0.5
+		local total_weight = 0
+
+		if is_suffix then
+			for index, value in ipairs(SuffixTable) do
+				table.insert(candidates, index)
+				total_weight = total_weight + 1 / value.rarity
+			end
+			local candidates_count = #candidates
+			if candidates_count == 0 then
+				goto continue
+			end
+			local dice = love.math.random() * total_weight
+			local acc = 0
+			for index, value in ipairs(candidates) do
+				local affix = SuffixTable[value]
+				acc = acc + 1 / affix.rarity
+				if acc >= dice then
+					table.insert(item.suffixes, value)
+					goto continue
+				end
+			end
+		else
+			for index, value in ipairs(PrefixTable) do
+				table.insert(candidates, index)
+				total_weight = total_weight + 1 / value.rarity
+			end
+			local candidates_count = #candidates
+			if candidates_count == 0 then
+				goto continue
+			end
+			local dice = love.math.random() * total_weight
+			local acc = 0
+			for index, value in ipairs(candidates) do
+				local affix = PrefixTable[value]
+				acc = acc + 1 / affix.rarity
+				if acc >= dice then
+					table.insert(item.prefixes, value)
+					goto continue
+				end
+			end
+		end
+		::continue::
+	end
+
+	return item
+end
+
+---@param enemy Enemy
+local function on_kill(enemy)
+	if love.math.random() < 0.2 and #items < 15 then
+		local item = generate_loot(love.math.random() * 4 * difficulty)
+		table.insert(items, item)
+	end
+	exp = exp + difficulty
+end
+
+local function deal_damage_area(left_x, right_x, damage_value)
+	for index, value in ipairs(enemies) do
+		if value.position >= left_x and value.position <= right_x and value.hp > 0 then
+			value.hp = value.hp - damage_value
+			if value.hp <= 0 then
+				on_kill(value)
+			end
+			value.being_hit = true
+			value.being_hit_animation_progress = 0
+			value.position = math.min(stage_distance, value.position + 5)
+			insert_particle(value.position + 0.1 * (love.math.random() - 0.5), 1 + love.math.random(), blood_ground_image, 4)
+			insert_particle(value.position + 0.1 * (love.math.random() - 0.5), 0.25 + love.math.random(), blood_hit_image, 0.25)
+		end
+	end
+end
+
+---@class SkillData
+---@field progress number
+---@field completed boolean
+
+---@type SkillData
+local basic_attack_data = {
+	progress = 0,
+	completed = true
+}
+
+local basic_attack = {}
+
+---@class ActorModelDescription
+---@field size_x number
+---@field size_y number
+---@field image love.Image
+
+---@class ActorModelState
+---@field position number
+
+---@type ActorModelDescription
+local basic_skeleton = {
+	size_x = 40,
+	size_y = 40,
+	image = love.graphics.newImage("hero-battle.png")
+}
+
+---comment
+---@param x number
+---@param y number
+---@param data SkillData
+---@param actor_model ActorModelDescription
+---@param actor_position ActorModelState
+---@param camera_shift number
+function basic_attack.draw(x, y, data, actor_model, actor_position, camera_shift)
+	local frame = math.floor(data.progress * 4) % 4
+	love.graphics.setColor(1, 1, 1, 1)
+	print(camera_shift + x + actor_position.position + actor_model.size_x / 2, y - actor_model.size_y)
+	love.graphics.draw(hit_image, hit_quads[frame + 1], camera_shift + x + actor_position.position - actor_model.size_x / 2, y - actor_model.size_y)
+end
+
+---@param dt number
+---@param model ActorModelState
+---@param data SkillData
+function basic_attack.update(dt, model, data)
+	local attack_range = get_attack_range(weapon)
+	data.progress = data.progress + dt
+	if data.progress >= 1 then
+		deal_damage_area(model.position, model.position + attack_range, damage)
+		if (weapon) then
+			items[weapon].durability = math.max(0, items[weapon].durability - durability_loss_per_attack(weapon))
+		end
+		data.progress = 0
+		data.completed = true
+	end
+end
+
+---comment
+---@param model ActorModelDescription
+---@param state ActorModelState
+local function draw_character(x, y, model, state, camera_shift)
+	love.graphics.setColor(1, 1, 1, 1)
+	love.graphics.draw(model.image, x + camera_shift + state.position - model.size_x / 2, y - model.size_y)
+end
+
+-- local current_skill = nil
 
 local function character_widget(render, x, y)
 	panel(render, x, y, 100, 120)
@@ -367,6 +535,8 @@ local fade_in = false
 local fade_progress = 1
 
 local function battle_panel(render, x, y)
+	local battle_y = y + 240
+
 	love.graphics.setColor(1, 1, 1, 1)
 	love.graphics.draw(bg, x  - actual_camera % 1200, y)
 	love.graphics.draw(bg, x  - actual_camera % 1200+ 1200, y)
@@ -381,8 +551,6 @@ local function battle_panel(render, x, y)
 		love.graphics.draw(portal_image, portal_quads[frame + 1], base_camera_shift + x + stage_distance - actual_camera, y + 180, 0, 1, 1)
 	end
 
-
-
 	for index, value in ipairs(particles) do
 		if value.time_left > 0 then
 			love.graphics.setColor(1, 1, 1, value.time_left / value.max_time)
@@ -392,23 +560,14 @@ local function battle_panel(render, x, y)
 
 	for index, value in ipairs(enemies) do
 		if value.hp > 0 then
-			love.graphics.setColor(1, 1, 1, 1)
-			love.graphics.draw(value.image, base_camera_shift + x + value.position - actual_camera, y + 200)
-		else
-			-- love.graphics.setColor(1, 0, 0, 1)
-			-- love.graphics.circle("fill", x + 60 + value.position * 500, y + 240, 10)
+			draw_character(x, battle_y, basic_skeleton, { position = value.position}, base_camera_shift - actual_camera)
 		end
 	end
 
-	love.graphics.setColor(1, 0, 0, 1)
-	-- love.graphics.circle("line", x + 60 + progress * 500, y + 240, 10)
-	love.graphics.setColor(1, 1, 1, 1)
-	love.graphics.draw(hero_battle, x + base_camera_shift + progress - actual_camera, y + 200)
+	draw_character(x, battle_y, basic_skeleton, player_model, base_camera_shift - actual_camera)
 
 	if is_attacking then
-		local frame = math.floor(attack_progress * 4) % 4
-		love.graphics.setColor(1, 1, 1, 1)
-		love.graphics.draw(hit_image, hit_quads[frame + 1], base_camera_shift + x + progress - actual_camera, y + 200)
+		basic_attack.draw(x, battle_y, basic_attack_data, basic_skeleton, player_model, base_camera_shift - actual_camera)
 	end
 
 	for index, value in ipairs(enemies) do
@@ -416,7 +575,7 @@ local function battle_panel(render, x, y)
 			local frame = math.floor(value.attack_progress * 4) % 4
 			love.graphics.setColor(1, 1, 1, 1)
 			love.graphics.draw(
-				hit_image, hit_quads[frame + 1], base_camera_shift + x + value.position - actual_camera + 40, y + 200,
+				hit_image, hit_quads[frame + 1], base_camera_shift + x + value.position - actual_camera + 20, y + 200,
 				0, -1, 1
 			)
 		end
@@ -584,84 +743,18 @@ local function generate_enemies()
 	end
 end
 
----comment
----@param rarity number
-local function generate_loot(rarity)
-	---@type Item
-	local item = {
-		kind = math.floor(#BaseItemTable *love.math.random()) + 1,
-		suffixes = {},
-		prefixes = {},
-		durability = 1
-	}
-
-	local mods = rarity
-
-	for i = 1, rarity do
-		---@type number[]
-		local candidates = {}
-		local is_suffix = love.math.random() > 0.5
-		local total_weight = 0
-
-		if is_suffix then
-			for index, value in ipairs(SuffixTable) do
-				table.insert(candidates, index)
-				total_weight = total_weight + 1 / value.rarity
-			end
-			local candidates_count = #candidates
-			if candidates_count == 0 then
-				goto continue
-			end
-			local dice = love.math.random() * total_weight
-			local acc = 0
-			for index, value in ipairs(candidates) do
-				local affix = SuffixTable[value]
-				acc = acc + 1 / affix.rarity
-				if acc >= dice then
-					table.insert(item.suffixes, value)
-					goto continue
-				end
-			end
-		else
-			for index, value in ipairs(PrefixTable) do
-				table.insert(candidates, index)
-				total_weight = total_weight + 1 / value.rarity
-			end
-			local candidates_count = #candidates
-			if candidates_count == 0 then
-				goto continue
-			end
-			local dice = love.math.random() * total_weight
-			local acc = 0
-			for index, value in ipairs(candidates) do
-				local affix = PrefixTable[value]
-				acc = acc + 1 / affix.rarity
-				if acc >= dice then
-					table.insert(item.prefixes, value)
-					goto continue
-				end
-			end
-		end
-		::continue::
-	end
-
-	return item
-end
-
 function love.load()
 	love.window.setTitle("Endless Ledge")
 	generate_enemies()
 end
 
 local reset_stage = true
-local enemy_attack_distance = 20
-local enemy_attack_start = 15
 local enemy_speed = 200
 function love.update(dt)
 
 	timer = timer + dt
 
-	local distance_from_camera = progress - actual_camera
+	local distance_from_camera = player_model.position - actual_camera
 
 	local t = math.min(1, math.max(0, math.abs(distance_from_camera) / 50 - 1))
 	if (not fade_in) then
@@ -671,10 +764,10 @@ function love.update(dt)
 		actual_camera = actual_camera + SMOOTHERSTEP(t) * dt * distance_from_camera * 2
 	end
 
-	if progress >= stage_distance or hp <= 0 then
+	if player_model.position >= stage_distance or hp <= 0 then
 		reset_stage = true
 		fade_in = true
-		progress = 0
+		player_model.position = 0
 		hp = max_hp
 		shield = get_shield(weapon) + get_shield(boots)
 		stage_distance = math.sqrt(difficulty) * 1000
@@ -686,10 +779,10 @@ function love.update(dt)
 			if fade_progress >= 1 then
 				fade_out = true
 				fade_in = false
-				actual_camera = progress
+				actual_camera = player_model.position
 			end
 		else
-			progress = 0
+			player_model.position = 0
 			reset_stage = false
 			update_damage_and_speed()
 			generate_enemies()
@@ -707,8 +800,9 @@ function love.update(dt)
 	end
 
 	for index, value in ipairs(enemies) do
-		if value.position < progress + enemy_attack_start and value.hp > 0 then
+		if value.position < player_model.position + get_attack_range(weapon) and value.hp > 0 then
 			is_attacking = true
+			basic_attack_data.completed = false
 			break
 		else
 			is_attacking = false
@@ -723,7 +817,7 @@ function love.update(dt)
 		if value.being_hit and value.being_hit_animation_progress < 1 then
 			value.being_hit_animation_progress = value.being_hit_animation_progress + dt
 		end
-		if value.position < progress + enemy_attack_distance and value.hp > 0 then
+		if value.position < player_model.position + 20 and value.hp > 0 then
 			value.is_attacking = true
 			value.attack_progress = value.attack_progress + dt
 			if value.attack_progress >= 1 then
@@ -751,39 +845,21 @@ function love.update(dt)
 
 
 	if is_attacking then
-		attack_progress = attack_progress + dt * attack_speed
-		if attack_progress >= 1 then
-			for index, value in ipairs(enemies) do
-				if value.position < progress + enemy_attack_distance and value.hp > 0 then
-					value.hp = value.hp - damage
-					if value.hp <= 0 and love.math.random() < 0.2 and #items < 15 then
-						local item = generate_loot(love.math.random() * 4 * difficulty)
-						table.insert(items, item)
-						exp = exp + difficulty
-					end
-					value.being_hit = true
-					value.being_hit_animation_progress = 0
-					value.position = math.min(stage_distance, value.position + 5)
-
-					if (weapon) then
-						items[weapon].durability = math.max(0, items[weapon].durability - durability_loss_per_attack(weapon))
-					end
-
-					insert_particle(value.position + 0.1 * (love.math.random() - 0.5), 1 + love.math.random(), blood_ground_image, 4)
-					insert_particle(value.position + 0.1 * (love.math.random() - 0.5), 0.25 + love.math.random(), blood_hit_image, 0.25)
-				end
-			end
-			attack_progress = 0
+		print("attack")
+		basic_attack.update(dt, player_model, basic_attack_data)
+		if basic_attack_data.completed then
+			print("completed")
+			is_attacking = false
 		end
 	else
 		local move = dt * speed
 		for index, value in ipairs(enemies) do
-			local shift = value.position - progress
-			if shift - 0.05 <= move and value.hp > 0 then
-				move = shift - 0.04
+			local shift = value.position - player_model.position
+			if shift - 5 <= move and value.hp > 0 then
+				move = shift - 4
 			end
 		end
-		progress = progress + move
+		player_model.position = player_model.position + move
 	end
 
 
