@@ -17,8 +17,13 @@ local function draw_image_in_rect(img, x, y, w, h, r, ox, oy, kx, ky)
 	return love.graphics.draw(img, x, y, r, w / img:getWidth(), h / img:getHeight(), ox, oy, kx, ky)
 end
 
-local hp_gradient_ally = gradient_h({{0.7, 0.9, 0.8}, {100 / 255, 190 / 255, 175 / 255}})
-local hp_gradient_enemy = gradient_h({{0.95, 0.1, 0.05}, {1, 0.11, 0.05}})
+-- local hp_gradient_ally = gradient_h({{0.7, 0.9, 0.8}, {100 / 255, 190 / 255, 175 / 255}})
+-- local hp_gradient_enemy = gradient_h({{0.95, 0.1, 0.05}, {1, 0.11, 0.05}})
+
+local gradient_blue = gradient_h({{0.7, 0.9, 0.8}, {100 / 255, 190 / 255, 175 / 255}})
+local gradient_yellow = gradient_h({{0.95, 0.95, 0.8}, {0.95, 0.5, 0.1}})
+local gradient_red = gradient_h({{0.95, 0.25, 0.2}, {0.95, 0.1, 0.0}})
+
 
 ---comment
 ---@param x number
@@ -29,25 +34,13 @@ local hp_gradient_enemy = gradient_h({{0.95, 0.1, 0.05}, {1, 0.11, 0.05}})
 ---@param hp_view number
 ---@param max_hp number
 ---@param shield number
----@param hostile boolean
----@param level number?
-return function (x, y, w, h, hp, hp_view, max_hp, shield, hostile, level)
+---@param style "blue"|"yellow"|"red"
+return function (x, y, w, h, hp, hp_view, max_hp, shield, style)
 	local outerouter = 1
 	local outer = 1
 	local shield_offset = 1
 	local fill = 1
 	local inner = 1
-
-	if level then
-		love.graphics.setColor(0, 0, 0)
-		love.graphics.circle("fill", x - h, y + h / 2, h + 2)
-		love.graphics.setColor(1, 1, 1)
-		love.graphics.circle("fill", x - h, y + h / 2, h)
-		style.default_font()
-		style.basic_element_color()
-		local font_height = style.default_font_height()
-		love.graphics.printf(tostring(level), x - h * 2, y + h / 2 - font_height / 2, h * 2, "center")
-	end
 
 	-- outer outer border
 	love.graphics.setColor(0, 0, 0)
@@ -88,17 +81,15 @@ return function (x, y, w, h, hp, hp_view, max_hp, shield, hostile, level)
 		local _w = w - 2 * margin
 		local _h = h - 2 * margin
 		love.graphics.setColor(1, 1, 1)
-		if hostile then
-			draw_image_in_rect(hp_gradient_enemy, _x, _y, _w * hp_ratio_actual, _h, 0)
+		if style =="blue" then
+			draw_image_in_rect(gradient_blue, _x, _y, _w * hp_ratio_actual, _h, 0)
+		elseif style =="red" then
+			draw_image_in_rect(gradient_red, _x, _y, _w * hp_ratio_actual, _h, 0)
 		else
-			draw_image_in_rect(hp_gradient_ally, _x, _y, _w * hp_ratio_actual, _h, 0)
+			draw_image_in_rect(gradient_yellow, _x, _y, _w * hp_ratio_actual, _h, 0)
 		end
 
-		if hostile then
-			love.graphics.setColor(1, 0.8, 0.8, 1)
-		else
-			love.graphics.setColor(0.35, 0.45, 0.4)
-		end
+		love.graphics.setColor(0.95, 0.45, 0.4)
 
 		if hp_ratio_view > hp_ratio_actual then
 			love.graphics.rectangle("fill", _x + _w * hp_ratio_actual, _y, _w * (hp_ratio_view - hp_ratio_actual), _h)

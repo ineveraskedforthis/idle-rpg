@@ -27,7 +27,7 @@ end
 local style = require "ui._style"
 local button = require "ui.button"
 local panel = require "ui.panel"
-local hp_bar = require "ui.hp-bar"
+local progress_bar = require "ui.progress-bar"
 local border = require "ui.border"
 local rect_detection = require "ui.rect"
 
@@ -103,9 +103,13 @@ SkillEnum = {
 ---@field items Item[]
 ---@field weapon number|nil
 ---@field boots number|nil
----@field exp number
----@field level number
+---@field mastery MasteryState
 ---@field current_action SkillEnum?
+
+---@class MasteryState
+---@field melee_weapon number
+---@field general_magic number
+
 
 ---@type PlayerState
 local player_state = {
@@ -113,15 +117,25 @@ local player_state = {
 	items = {},
 	melee_damage = 0,
 	spell_damage = 0,
-	exp = 0,
-	level = 0
+	mastery = {
+		melee_weapon = 0,
+		general_magic = 0
+	}
+}
+
+---@enum ActorModelStateEnum
+ActorModelStateEnum = {
+	Idle = 1,
+	Walking = 2,
+	Attacking = 3,
+	Dead = 4
 }
 
 ---@type ActorModelState
 local player_model = {
 	position = 0,
 	walk_timer = 0,
-	walking = false
+	state = ActorModelStateEnum.Idle
 }
 
 local difficulty = 1
@@ -144,6 +158,8 @@ end
 
 ---@class Enemy
 ---@field hp number
+---@field view_hp number
+---@field max_hp number
 ---@field model ActorModelDescription
 ---@field position number
 ---@field damage number
@@ -152,6 +168,7 @@ end
 ---@field being_hit boolean
 ---@field being_hit_animation_progress number
 ---@field on_kill_triggered boolean
+---@field death_progress number
 
 ---@class ProjectileDescription
 ---@field size_x number
@@ -419,11 +436,17 @@ local action_data = {
 ---@field walk_frames love.Quad[]
 ---@field walk_timer_mult number
 ---@field idle_frames love.Quad[]
+---@field attack_timer_mult number
+---@field attack_frames love.Quad[]
+---@field dead_frame love.Quad[]
+
+
 
 ---@class ActorModelState
 ---@field position number
----@field walking boolean
+---@field state ActorModelStateEnum
 ---@field walk_timer number
+---@field death_timer number
 
 local basic = love.graphics.newImage("hero-battle.png")
 
@@ -435,7 +458,26 @@ local basic_skeleton = {
 	image_base_scale = 2,
 	walk_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
 	idle_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
-	walk_timer_mult = 1
+	attack_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
+	walk_timer_mult = 1,
+	attack_timer_mult =1,
+	dead_frame = {love.graphics.newQuad(40, 0, 40, 40, basic)},
+}
+
+local big_rat_image =love.graphics.newImage("assets/rat-big/base.png")
+
+---@type ActorModelDescription
+local big_rat = {
+	size_x = 300,
+	size_y = 300,
+	image = big_rat_image,
+	image_base_scale = 0.25,
+	walk_frames = {love.graphics.newQuad(0, 0, 300, 300, big_rat_image), love.graphics.newQuad(300, 0, 300, 300, big_rat_image)},
+	idle_frames = {love.graphics.newQuad(300, 0, 300, 300, big_rat_image)},
+	attack_frames = {love.graphics.newQuad(0, 300, 300, 300, big_rat_image)},
+	dead_frame = {love.graphics.newQuad(300, 300, 300, 300, big_rat_image)},
+	walk_timer_mult = 1,
+	attack_timer_mult = 1,
 }
 
 local hero = love.graphics.newImage("character-basic.png")
@@ -457,38 +499,86 @@ local basic_hero = {
 		love.graphics.newQuad(400 * 8, 0, 400, 600, hero),
 	},
 	walk_timer_mult = 1 / 200,
+	attack_timer_mult = 1 / 100,
 	idle_frames = {love.graphics.newQuad(0, 0, 400, 600, hero)},
+	attack_frames =  {love.graphics.newQuad(0, 0, 400, 600, hero)},
+	dead_frame =  {love.graphics.newQuad(0, 0, 400, 600, hero)},
 }
 
 ---comment
+---@param x number
+---@param y number
 ---@param model ActorModelDescription
 ---@param state ActorModelState
-local function draw_character(x, y, model, state, camera_shift)
+---@param camera_shift number
+---@param orientation number
+local function draw_character(x, y, model, state, camera_shift, orientation)
 	love.graphics.setColor(1, 1, 1, 1)
 
-	if state.walking then
+	---@type number
+	local model_x = x + camera_shift + state.position - model.size_x / 2 * model.image_base_scale
+	if orientation < 0 then
+		model_x = model_x + model.size_x * model.image_base_scale
+	end
+
+	local model_y = y - model.size_y *model.image_base_scale
+
+	if state.state ==ActorModelStateEnum.Walking then
 		local frame = math.floor(state.walk_timer * model.walk_timer_mult * #model.walk_frames) % #model.walk_frames
 		love.graphics.draw(
 			model.image,
 			model.walk_frames[frame + 1],
-			x + camera_shift + state.position - model.size_x / 2 * model.image_base_scale,
-			y - model.size_y *model.image_base_scale,
+			model_x, model_y,
 			0,
-			model.image_base_scale,
+			model.image_base_scale * orientation,
 			model.image_base_scale
 		)
-	else
-		-- replace with per entity timer
+	elseif state.state == ActorModelStateEnum.Idle then
+		-- TODO: replace with per entity timer
 		local frame = math.floor(timer / 50 * #model.idle_frames) % #model.idle_frames
 		love.graphics.draw(
 			model.image,
 			model.idle_frames[frame + 1],
-			x + camera_shift + state.position - model.size_x / 2 * model.image_base_scale,
-			y - model.size_y *model.image_base_scale,
+			model_x, model_y,
 			0,
-			model.image_base_scale,
+			model.image_base_scale * orientation,
 			model.image_base_scale
 		)
+	elseif state.state == ActorModelStateEnum.Attacking then
+		-- replace with per entity timer
+		local frame = math.floor(timer * model.attack_timer_mult * #model.idle_frames) % #model.idle_frames
+		love.graphics.draw(
+			model.image,
+			model.attack_frames[frame + 1],
+			model_x, model_y,
+			0,
+			model.image_base_scale * orientation,
+			model.image_base_scale
+		)
+	elseif  state.state ==ActorModelStateEnum.Dead then
+		if state.death_timer < 0.5 then
+			love.graphics.setColor(2, 2 * math.sin(state.death_timer * 16 *math.pi), 2 * math.sin(state.death_timer * 16 *math.pi))
+			local frame = math.floor(timer / 50 * #model.idle_frames) % #model.idle_frames
+			love.graphics.draw(
+				model.image,
+				model.idle_frames[frame + 1],
+				model_x, model_y,
+				0,
+				model.image_base_scale * orientation,
+				model.image_base_scale
+			)
+		else
+			-- replace with per entity timer
+			local frame = math.floor(timer * model.attack_timer_mult * #model.idle_frames) % #model.idle_frames
+			love.graphics.draw(
+				model.image,
+				model.dead_frame[frame + 1],
+				model_x, model_y,
+				0,
+				model.image_base_scale * orientation,
+				model.image_base_scale
+			)
+		end
 	end
 end
 
@@ -505,7 +595,7 @@ local function character_widget(render, x, y)
 	love.graphics.setColor(1, 1, 1, 1)
 	love.graphics.draw(player_image, x + 5, y + 5)
 
-	hp_bar(x + 3, y + 99, 94, 17, hp, hp_view, max_hp, shield, false )
+	progress_bar(x + 3, y + 99, 94, 17, hp, hp_view, max_hp, shield, "blue" )
 end
 
 local function status_bar(render, x, y)
@@ -520,6 +610,10 @@ local fade_out = true
 local fade_in = false
 local fade_progress = 1
 
+---comment
+---@param render boolean
+---@param x number
+---@param y number
 local function battle_panel(render, x, y)
 	local battle_y = y + 240
 
@@ -546,11 +640,27 @@ local function battle_panel(render, x, y)
 
 	for index, value in ipairs(stage.enemies) do
 		if value.hp > 0 then
-			draw_character(x, battle_y, basic_skeleton, { position = value.position, walk_timer = timer, walking = not value.is_attacking }, base_camera_shift - actual_camera)
+			local enemy_state = ActorModelStateEnum.Walking
+			if value.is_attacking then
+				enemy_state = ActorModelStateEnum.Attacking
+			end
+			draw_character(x, battle_y, value.model, { position = value.position, walk_timer = timer, state = enemy_state, death_timer = 0 }, base_camera_shift - actual_camera, -1)
+			local bar_x = x + base_camera_shift - actual_camera + value.position - value.model.size_x / 4 *value.model.image_base_scale
+			local bar_width = value.model.size_x *value.model.image_base_scale / 2
+			local bar_y = battle_y - value.model.size_y *value.model.image_base_scale
+			progress_bar(bar_x, bar_y, bar_width, 7, value.hp, value.view_hp, value.max_hp, 0, "red")
+		else
+			draw_character(x, battle_y, value.model, { position = value.position, walk_timer = timer, state = ActorModelStateEnum.Dead, death_timer = value.death_progress }, base_camera_shift - actual_camera, -1)
 		end
 	end
 
-	draw_character(x, battle_y, basic_hero, player_model, base_camera_shift - actual_camera)
+	do
+		draw_character(x, battle_y, basic_hero, player_model, base_camera_shift - actual_camera, 1)
+		local bar_x = x + base_camera_shift - actual_camera + player_model.position - basic_hero.size_x / 4 *basic_hero.image_base_scale
+		local bar_width = basic_hero.size_x *basic_hero.image_base_scale / 2
+		local bar_y = battle_y - basic_hero.size_y *basic_hero.image_base_scale
+		progress_bar(bar_x, bar_y, bar_width, 7, hp, hp_view, max_hp, 0, "blue")
+	end
 
 	if player_state.current_action ==SkillEnum.BasicAttack then
 		basic_attack.draw(x, battle_y, action_data, basic_hero, player_model, base_camera_shift - actual_camera)
@@ -702,7 +812,7 @@ local function right_side_panel(render, mx, my)
 			update_damage_and_speed(player_state)
 		end
 
-		hp_bar(item_x + 5, item_y + interface_grid * 6 - 10, interface_grid * 6 - 10, 7, value.durability, value.durability, 1, 0, false)
+		progress_bar(item_x + 5, item_y + interface_grid * 6 - 10, interface_grid * 6 - 10, 7, value.durability, value.durability, 1, 0, "blue")
 
 		column = column + 1
 		if column >= 5 then
@@ -742,14 +852,17 @@ local function generate_enemies()
 		---@type Enemy
 		local starting_enemy = {
 			hp = 3 + difficulty,
-			model = basic_skeleton,
+			view_hp = 3 + difficulty,
+			max_hp = 3 + difficulty,
+			model = big_rat,
 			position = math.sqrt(love.math.random() + 0.5) * stage.distance,
 			damage = difficulty,
 			attack_progress = 0,
 			is_attacking = false,
 			being_hit = false,
 			being_hit_animation_progress = 0,
-			on_kill_triggered = false
+			on_kill_triggered = false,
+			death_progress = 0
 		}
 		table.insert(stage.enemies, starting_enemy)
 	end
@@ -818,7 +931,11 @@ function love.update(dt)
 	for index, value in ipairs(stage.enemies) do
 		if value.hp <= 0 and not value.on_kill_triggered then
 			value.on_kill_triggered = true
-			require "triggered.on_kill"(player_state, difficulty)
+			require "triggered.on-kill"(player_state, difficulty)
+		end
+
+		if value.hp <= 0 then
+			value.death_progress = value.death_progress + dt
 		end
 	end
 
@@ -877,7 +994,7 @@ function love.update(dt)
 				end
 				value.attack_progress = 0
 			end
-		else
+		elseif value.hp > 0 then
 			value.attack_progress = 0
 			value.is_attacking = false
 			value.position = value.position - dt * enemy_speed
@@ -885,7 +1002,7 @@ function love.update(dt)
 	end
 
 
-	player_model.walking = false
+	player_model.state = ActorModelStateEnum.Idle
 	if player_state.current_action == nil then
 		-- Can we do a basic attack?
 		local action_chosen = false
@@ -896,12 +1013,15 @@ function love.update(dt)
 
 			if value.position < player_model.position + basic_attack.activation_range(player_state) then
 				player_state.current_action = SkillEnum.BasicAttack
+				player_model.state = ActorModelStateEnum.Attacking
 				action_data.completed = false
 				action_data.progress = 0
 				action_chosen = true
 				break
 			elseif  value.position < player_model.position + comet.activation_range(player_state) then
 				player_state.current_action = SkillEnum.Comet
+				-- TODO: replace with spellcasting
+				player_model.state = ActorModelStateEnum.Attacking
 				action_data.completed = false
 				action_data.progress = 0
 				action_chosen = true
@@ -913,7 +1033,7 @@ function love.update(dt)
 		if not action_chosen then
 			local move = dt * speed
 			player_model.walk_timer = player_model.walk_timer + move
-			player_model.walking = true
+			player_model.state = ActorModelStateEnum.Walking
 			for index, value in ipairs(stage.enemies) do
 				local shift = value.position - player_model.position
 				if shift - 5 <= move and value.hp > 0 then
@@ -940,6 +1060,10 @@ function love.update(dt)
 
 	local decay = math.exp(-dt * 10)
 	hp_view = hp_view * decay + hp * (1 - decay)
+
+	for index, value in ipairs(stage.enemies) do
+		value.view_hp = value.view_hp * decay + value.hp * (1 - decay)
+	end
 end
 
 function love.draw()
