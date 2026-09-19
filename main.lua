@@ -119,7 +119,9 @@ local player_state = {
 
 ---@type ActorModelState
 local player_model = {
-	position = 0
+	position = 0,
+	walk_timer = 0,
+	walking = false
 }
 
 local difficulty = 1
@@ -413,15 +415,49 @@ local action_data = {
 ---@field size_x number
 ---@field size_y number
 ---@field image love.Image
+---@field image_base_scale number
+---@field walk_frames love.Quad[]
+---@field walk_timer_mult number
+---@field idle_frames love.Quad[]
 
 ---@class ActorModelState
 ---@field position number
+---@field walking boolean
+---@field walk_timer number
+
+local basic = love.graphics.newImage("hero-battle.png")
 
 ---@type ActorModelDescription
 local basic_skeleton = {
 	size_x = 40,
 	size_y = 40,
-	image = love.graphics.newImage("hero-battle.png")
+	image = basic,
+	image_base_scale = 2,
+	walk_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
+	idle_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
+	walk_timer_mult = 1
+}
+
+local hero = love.graphics.newImage("character-basic.png")
+
+---@type ActorModelDescription
+local basic_hero = {
+	size_x = 400,
+	size_y = 600,
+	image = hero,
+	image_base_scale = 0.25,
+	walk_frames = {
+		love.graphics.newQuad(400 * 1, 0, 400, 600, hero),
+		love.graphics.newQuad(400 * 2, 0, 400, 600, hero),
+		love.graphics.newQuad(400 * 3, 0, 400, 600, hero),
+		love.graphics.newQuad(400 * 4, 0, 400, 600, hero),
+		love.graphics.newQuad(400 * 5, 0, 400, 600, hero),
+		love.graphics.newQuad(400 * 6, 0, 400, 600, hero),
+		love.graphics.newQuad(400 * 7, 0, 400, 600, hero),
+		love.graphics.newQuad(400 * 8, 0, 400, 600, hero),
+	},
+	walk_timer_mult = 1 / 200,
+	idle_frames = {love.graphics.newQuad(0, 0, 400, 600, hero)},
 }
 
 ---comment
@@ -429,7 +465,31 @@ local basic_skeleton = {
 ---@param state ActorModelState
 local function draw_character(x, y, model, state, camera_shift)
 	love.graphics.setColor(1, 1, 1, 1)
-	love.graphics.draw(model.image, x + camera_shift + state.position - model.size_x / 2, y - model.size_y)
+
+	if state.walking then
+		local frame = math.floor(state.walk_timer * model.walk_timer_mult * #model.walk_frames) % #model.walk_frames
+		love.graphics.draw(
+			model.image,
+			model.walk_frames[frame + 1],
+			x + camera_shift + state.position - model.size_x / 2 * model.image_base_scale,
+			y - model.size_y *model.image_base_scale,
+			0,
+			model.image_base_scale,
+			model.image_base_scale
+		)
+	else
+		-- replace with per entity timer
+		local frame = math.floor(timer / 50 * #model.idle_frames) % #model.idle_frames
+		love.graphics.draw(
+			model.image,
+			model.idle_frames[frame + 1],
+			x + camera_shift + state.position - model.size_x / 2 * model.image_base_scale,
+			y - model.size_y *model.image_base_scale,
+			0,
+			model.image_base_scale,
+			model.image_base_scale
+		)
+	end
 end
 
 -- local current_skill = nil
@@ -486,16 +546,16 @@ local function battle_panel(render, x, y)
 
 	for index, value in ipairs(stage.enemies) do
 		if value.hp > 0 then
-			draw_character(x, battle_y, basic_skeleton, { position = value.position}, base_camera_shift - actual_camera)
+			draw_character(x, battle_y, basic_skeleton, { position = value.position, walk_timer = timer, walking = not value.is_attacking }, base_camera_shift - actual_camera)
 		end
 	end
 
-	draw_character(x, battle_y, basic_skeleton, player_model, base_camera_shift - actual_camera)
+	draw_character(x, battle_y, basic_hero, player_model, base_camera_shift - actual_camera)
 
 	if player_state.current_action ==SkillEnum.BasicAttack then
-		basic_attack.draw(x, battle_y, action_data, basic_skeleton, player_model, base_camera_shift - actual_camera)
+		basic_attack.draw(x, battle_y, action_data, basic_hero, player_model, base_camera_shift - actual_camera)
 	elseif  player_state.current_action == SkillEnum.Comet then
-		comet.draw(x, battle_y, action_data, basic_skeleton, player_model, base_camera_shift - actual_camera)
+		comet.draw(x, battle_y, action_data, basic_hero, player_model, base_camera_shift - actual_camera)
 	end
 
 	for index, value in ipairs(stage.enemies) do
@@ -683,7 +743,7 @@ local function generate_enemies()
 		local starting_enemy = {
 			hp = 3 + difficulty,
 			model = basic_skeleton,
-			position = math.sqrt(love.math.random()) * stage.distance,
+			position = math.sqrt(love.math.random() + 0.5) * stage.distance,
 			damage = difficulty,
 			attack_progress = 0,
 			is_attacking = false,
@@ -825,8 +885,10 @@ function love.update(dt)
 	end
 
 
+	player_model.walking = false
 	if player_state.current_action == nil then
 		-- Can we do a basic attack?
+		local action_chosen = false
 		for index, value in ipairs(stage.enemies) do
 			if value.hp <= 0 then
 				goto continue
@@ -836,24 +898,30 @@ function love.update(dt)
 				player_state.current_action = SkillEnum.BasicAttack
 				action_data.completed = false
 				action_data.progress = 0
+				action_chosen = true
 				break
 			elseif  value.position < player_model.position + comet.activation_range(player_state) then
 				player_state.current_action = SkillEnum.Comet
 				action_data.completed = false
 				action_data.progress = 0
+				action_chosen = true
 				break
 			end
 
 			::continue::
 		end
-		local move = dt * speed
-		for index, value in ipairs(stage.enemies) do
-			local shift = value.position - player_model.position
-			if shift - 5 <= move and value.hp > 0 then
-				move = shift - 4
+		if not action_chosen then
+			local move = dt * speed
+			player_model.walk_timer = player_model.walk_timer + move
+			player_model.walking = true
+			for index, value in ipairs(stage.enemies) do
+				local shift = value.position - player_model.position
+				if shift - 5 <= move and value.hp > 0 then
+					move = shift - 4
+				end
 			end
+			player_model.position = player_model.position + move
 		end
-		player_model.position = player_model.position + move
 	elseif player_state.current_action ==SkillEnum.BasicAttack then
 		basic_attack.update(vfx_manager, stage, player_state, dt, player_model, action_data)
 		if action_data.completed then
