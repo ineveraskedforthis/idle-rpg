@@ -16,7 +16,7 @@ local description = {
 			local b = BaseItemTable[weapon.kind]
 			attack_range = b.range
 		end
-		return attack_range / 2 + player_model.size_x / 2
+		return attack_range / 2 + player_model.size_x / 2 * player_model.image_base_scale
 	end,
 	draw = function (x, y, data, actor_model, actor_position, camera_shift)
 		local frame = math.floor(data.current_action.progress * 4) % 4
@@ -27,7 +27,7 @@ local description = {
 		love.graphics.draw(
 			hit_image,
 			hit_quads[frame + 1],
-			camera_shift + x + actor_position.position - actor_model.size_x / 2 * actor_model.image_base_scale,
+			camera_shift + x + actor_position.position - actor_model.size_x * actor_model.image_base_scale,
 			y - actor_model.size_y * actor_model.image_base_scale,
 			0, scale, scale
 		)
@@ -38,13 +38,13 @@ local description = {
 		local weapon = RETRIEVE_ITEM(player.weapon)
 		if weapon then
 			local b = BaseItemTable[weapon.kind]
-			attack_range = b.range + model_description.size_x / 2
+			attack_range = b.range + model_description.size_x / 2 *model_description.image_base_scale
 		end
 
 		local data = player.current_action
 		data.progress = data.progress + dt
 		if data.progress >= 1 then
-			flat_aoe(vfx, stage, model.position - model_description.size_x / 2, model.position + attack_range, player.melee_damage)
+			flat_aoe(vfx, stage, model.position - model_description.size_x / 2 *model_description.image_base_scale, model.position + attack_range, player.melee_damage)
 			if (weapon) then
 				local old_durability = weapon.durability
 				local next_durability = old_durability - 0.01
