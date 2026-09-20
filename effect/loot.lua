@@ -1,3 +1,21 @@
+
+---comment
+---@param item Item
+---@param affix ItemAffix
+---@return boolean
+local function legit(item, affix)
+	if BaseItemTable[item.kind].slot ==ItemSlot.Boots then
+		return affix.can_roll_for_armor
+	end
+	if BaseItemTable[item.kind].slot == ItemSlot.Weapon then
+		return affix.can_roll_for_weapon
+	end
+	if BaseItemTable[item.kind].slot ==ItemSlot.Ring then
+		return affix.can_roll_for_ring
+	end
+	error()
+end
+
 ---comment
 ---@param rarity number
 local function generate_loot(rarity)
@@ -6,7 +24,9 @@ local function generate_loot(rarity)
 		kind = math.floor(#BaseItemTable *love.math.random()) + 1,
 		suffixes = {},
 		prefixes = {},
-		durability = 1
+		durability = 1,
+		equipped = false,
+		cooldown = 0
 	}
 
 	local mods = rarity
@@ -19,8 +39,10 @@ local function generate_loot(rarity)
 
 		if is_suffix then
 			for index, value in ipairs(SuffixTable) do
-				table.insert(candidates, index)
-				total_weight = total_weight + 1 / value.rarity
+				if legit(item, value) then
+					table.insert(candidates, index)
+					total_weight = total_weight + 1 / value.rarity
+				end
 			end
 			local candidates_count = #candidates
 			if candidates_count == 0 then
@@ -38,8 +60,10 @@ local function generate_loot(rarity)
 			end
 		else
 			for index, value in ipairs(PrefixTable) do
-				table.insert(candidates, index)
-				total_weight = total_weight + 1 / value.rarity
+				if legit(item, value) then
+					table.insert(candidates, index)
+					total_weight = total_weight + 1 / value.rarity
+				end
 			end
 			local candidates_count = #candidates
 			if candidates_count == 0 then
@@ -65,7 +89,13 @@ end
 ---@param state PlayerState
 ---@param difficulty number
 local function loot_enemy(state, difficulty)
-	if love.math.random() < 0.2 and #state.items < 15 then
+	local inventory = 0
+	for index, value in ipairs(state.items) do
+		if not value.equipped then
+			inventory = inventory + 1
+		end
+	end
+	if love.math.random() < 10.2 and inventory < 15 then
 		local item = generate_loot(love.math.random() * 4 * difficulty)
 		table.insert(state.items, item)
 	end

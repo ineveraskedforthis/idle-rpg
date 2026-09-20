@@ -1,7 +1,5 @@
 local flat_aoe = require "effect.aoe-flat"
 
-local description = {}
-
 local hit_image = love.graphics.newImage("hit.png")
 local hit_quads = {}
 for i = 0, 3 do
@@ -9,57 +7,53 @@ for i = 0, 3 do
 	table.insert(hit_quads, quad)
 end
 
----comment
----@param x number
----@param y number
----@param data SkillData
----@param actor_model ActorModelDescription
----@param actor_position ActorModelState
----@param camera_shift number
-function description.draw(x, y, data, actor_model, actor_position, camera_shift)
-	local frame = math.floor(data.progress * 4) % 4
-	love.graphics.setColor(1, 1, 1, 1)
-	love.graphics.draw(hit_image, hit_quads[frame + 1], camera_shift + x + actor_position.position - actor_model.size_x / 2, y - actor_model.size_y)
-end
-
-
-
----@param vfx VFX
----@param stage Stage
----@param player PlayerState
----@param dt number
----@param model ActorModelState
----@param data SkillData
-function description.update(vfx, stage, player, dt, model, data)
-	local attack_range = 10
-	if player.weapon then
-		local w = player.items[player.weapon]
-		local b = BaseItemTable[w.kind]
-		attack_range = b.range
-	end
-
-	data.progress = data.progress + dt
-	if data.progress >= 1 then
-		flat_aoe(vfx, stage, model.position, model.position + attack_range, player.melee_damage)
-		if (player.weapon) then
-			local old_durability = player.items[player.weapon].durability
-			local next_durability = old_durability - 0.01
-			player.items[player.weapon].durability = math.max(0, next_durability)
+---@type SkillDefinition
+local description = {
+	activation_range =function (player, player_model)
+		local attack_range = 10
+		if player.weapon then
+			local w = player.items[player.weapon]
+			local b = BaseItemTable[w.kind]
+			attack_range = b.range
 		end
-		data.progress = 0
-		data.completed = true
-	end
-end
+		return attack_range / 2 + player_model.size_x / 2
+	end,
+	draw = function (x, y, data, actor_model, actor_position, camera_shift)
+		local frame = math.floor(data.current_action.progress * 4) % 4
+		love.graphics.setColor(1, 1, 1, 1)
 
----@param player PlayerState
-function description.activation_range(player)
-	local attack_range = 10
-	if player.weapon then
-		local w = player.items[player.weapon]
-		local b = BaseItemTable[w.kind]
-		attack_range = b.range
+		local size_actor = actor_model.size_y
+		local scale = size_actor / 40 * actor_model.image_base_scale
+		love.graphics.draw(
+			hit_image,
+			hit_quads[frame + 1],
+			camera_shift + x + actor_position.position - actor_model.size_x / 2 * actor_model.image_base_scale,
+			y - actor_model.size_y * actor_model.image_base_scale,
+			0, scale, scale
+		)
+
+	end,
+	update =function (vfx, stage, player, dt, model, model_description, skip_casting)
+		local attack_range = 10 + model_description.size_x / 2
+		if player.weapon then
+			local w = player.items[player.weapon]
+			local b = BaseItemTable[w.kind]
+			attack_range = b.range + model_description.size_x / 2
+		end
+
+		local data = player.current_action
+		data.progress = data.progress + dt
+		if data.progress >= 1 then
+			flat_aoe(vfx, stage, model.position - model_description.size_x / 2, model.position + attack_range, player.melee_damage)
+			if (player.weapon) then
+				local old_durability = player.items[player.weapon].durability
+				local next_durability = old_durability - 0.01
+				player.items[player.weapon].durability = math.max(0, next_durability)
+			end
+			data.progress = 0
+			data.completed = true
+		end
 	end
-	return attack_range / 2
-end
+}
 
 return description

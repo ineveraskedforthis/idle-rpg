@@ -1,6 +1,10 @@
-local basic_attack = require "skills.melee-attack"
-local comet = require "skills.comet"
+-- local basic_attack = require "skills.melee-attack"
+-- local comet = require "skills.comet"
 local aoe = require "effect.aoe-flat"
+
+local skills = require "skills._manager"
+
+ITEM_BASE_COOLDOWN = 0.3
 
 function CLAMP(x, a, b)
 	if (x < a) then
@@ -54,14 +58,14 @@ end
 local blood_hit_image = love.graphics.newImage("blood-hit.png")
 local blood_ground_image = love.graphics.newImage("blood-ground.png")
 
----@class Particle
+---@class (exact) Particle
 ---@field time_left number
 ---@field max_time number
 ---@field size number
 ---@field position number
 ---@field image love.Image
 
----@class VFX
+---@class (exact) VFX
 ---@field particles Particle[]
 ---@type VFX
 local vfx_manager = {
@@ -90,23 +94,32 @@ local max_hp = 15
 local shield = 20
 local speed = 0.2
 
----@enum SkillEnum
-SkillEnum = {
-	BasicAttack = 1,
-	Comet = 2,
+---@enum ActionEnum
+ActionEnum = {
+	Nothing = 1,
+	ActivateSkill = 2,
+	ActivateItem = 3
 }
 
----@class PlayerState
+---@class (exact) Action
+---@field kind ActionEnum
+---@field used_skill SkillEnum?
+---@field used_item number?
+---@field progress number
+---@field completed boolean
+
+---@class (exact) PlayerState
 ---@field attack_range number
 ---@field melee_damage number
 ---@field spell_damage number
 ---@field items Item[]
+---@field rings number[]
 ---@field weapon number|nil
 ---@field boots number|nil
 ---@field mastery MasteryState
----@field current_action SkillEnum?
+---@field current_action Action
 
----@class MasteryState
+---@class (exact) MasteryState
 ---@field melee_weapon number
 ---@field general_magic number
 
@@ -117,9 +130,17 @@ local player_state = {
 	items = {},
 	melee_damage = 0,
 	spell_damage = 0,
+	rings = {},
 	mastery = {
 		melee_weapon = 0,
 		general_magic = 0
+	},
+	current_action = {
+		kind = ActionEnum.Nothing,
+		used_item = nil,
+		used_skill = nil,
+		progress = 0,
+		completed = true,
 	}
 }
 
@@ -135,7 +156,8 @@ ActorModelStateEnum = {
 local player_model = {
 	position = 0,
 	walk_timer = 0,
-	state = ActorModelStateEnum.Idle
+	state = ActorModelStateEnum.Idle,
+	death_timer = 0,
 }
 
 local difficulty = 1
@@ -156,7 +178,7 @@ local function display_stats(render, x, y)
 end
 
 
----@class Enemy
+---@class (exact) Enemy
 ---@field hp number
 ---@field view_hp number
 ---@field max_hp number
@@ -170,14 +192,14 @@ end
 ---@field on_kill_triggered boolean
 ---@field death_progress number
 
----@class ProjectileDescription
+---@class (exact) ProjectileDescription
 ---@field size_x number
 ---@field size_y number
 ---@field image love.Image
 ---@field movement_frames love.Quad[]
 ---@field impact_frames love.Quad[]
 
----@class Projectile
+---@class (exact) Projectile
 ---@field desc ProjectileDescription
 ---@field height number
 ---@field position number
@@ -189,7 +211,7 @@ end
 ---@field discard boolean
 ---@field damage number
 
----@class Stage
+---@class (exact) Stage
 ---@field distance number
 ---@field enemies Enemy[]
 ---@field projectiles Projectile[]
@@ -204,7 +226,8 @@ local stage = {
 ---@enum ItemSlot
 ItemSlot = {
 	Boots = 1,
-	Weapon = 2
+	Weapon = 2,
+	Ring = 3
 }
 
 ---@enum ItemImageSize
@@ -214,7 +237,7 @@ ItemImageSize = {
 	Large = 3,
 }
 
----@class ItemKind
+---@class (exact) ItemKind
 ---@field name string
 ---@field image love.Image
 ---@field damage number
@@ -262,17 +285,39 @@ local function register_boots(name, image, speed_modifier, base_shield)
 end
 
 
+local function register_ring(name, image, base_shield)
+	---@type ItemKind
+	local item = {
+		name = name,
+		image = image,
+		damage = 0,
+		base_attack_speed = 0,
+		slot = ItemSlot.Ring,
+		range = 0,
+		speed_modifier = 0,
+		shield = base_shield,
+		image_kind = ItemImageSize.Small
+	}
+	table.insert(BaseItemTable, item)
+end
+
 register_boots("Boots", love.graphics.newImage("boots.png"), 1.1, 5)
 register_weapon("Knife", love.graphics.newImage("knife.png"), 2, 2.25, 0)
+register_ring("ShieldRing", love.graphics.newImage("ring.png"), 5)
 
 
----@class ItemAffix
+---@class (exact) ItemAffix
 ---@field name string
 ---@field speed_modifier number
 ---@field pack_size number
----@field add_damage number
+---@field melee_damage number
+---@field magic_damage number
 ---@field rarity number
 ---@field shield number
+---@field allows_skill SkillEnum|nil
+---@field can_roll_for_weapon boolean
+---@field can_roll_for_armor boolean
+---@field can_roll_for_ring boolean
 
 ---@type ItemAffix[]
 SuffixTable = {}
@@ -284,9 +329,13 @@ do
 	local item = {
 		name = "Quick",
 		pack_size = 0,
-		speed_modifier = 0.2,
+		speed_modifier = 0.05,
 		rarity = 1,
-		add_damage = 0,
+		melee_damage = 0,
+		magic_damage = 0,
+		can_roll_for_armor = true,
+		can_roll_for_weapon = false,
+		can_roll_for_ring = false,
 		shield = 0
 	}
 	table.insert(PrefixTable, item)
@@ -298,8 +347,28 @@ do
 		pack_size = 0,
 		speed_modifier = 0,
 		rarity = 1,
-		add_damage = 1,
-		shield = 0
+		melee_damage = 1,
+		shield = 0,
+		can_roll_for_armor = false,
+		can_roll_for_ring = false,
+		can_roll_for_weapon = true,
+		magic_damage = 0,
+	}
+	table.insert(PrefixTable, item)
+end
+do
+	---@type ItemAffix
+	local item = {
+		name = "Mystic",
+		pack_size = 0,
+		speed_modifier = 0,
+		rarity = 1,
+		melee_damage = 1,
+		shield = 0,
+		can_roll_for_armor = false,
+		can_roll_for_ring = false,
+		can_roll_for_weapon = true,
+		magic_damage = 0,
 	}
 	table.insert(PrefixTable, item)
 end
@@ -308,10 +377,15 @@ do
 	local item = {
 		name = "of Tailwind",
 		pack_size = 0,
-		speed_modifier = 0.4,
-		rarity = 1,
+		speed_modifier = 0.1,
+		rarity = 10,
 		add_damage = 0,
-		shield = 0
+		shield = 0,
+		can_roll_for_armor =true,
+		can_roll_for_ring =false,
+		can_roll_for_weapon =false,
+		magic_damage = 0,
+		melee_damage =0,
 	}
 	table.insert(SuffixTable, item)
 end
@@ -323,16 +397,41 @@ do
 		speed_modifier = 0.0,
 		rarity = 1,
 		add_damage = 0,
-		shield = 10
+		shield = 10,
+		can_roll_for_armor =true,
+		can_roll_for_ring = true,
+		can_roll_for_weapon = false,
+		magic_damage = 0,
+		melee_damage = 0,
+	}
+	table.insert(SuffixTable, item)
+end
+do
+	---@type ItemAffix
+	local item = {
+		name = "of Skyfall",
+		pack_size = 0,
+		speed_modifier = 0.0,
+		rarity = 1,
+		add_damage = 0,
+		shield = 10,
+		can_roll_for_armor = false,
+		can_roll_for_ring = true,
+		can_roll_for_weapon = false,
+		magic_damage = 1,
+		melee_damage = 0,
+		allows_skill = SkillEnum.Comet
 	}
 	table.insert(SuffixTable, item)
 end
 
----@class Item
+---@class (exact) Item
 ---@field kind number
 ---@field suffixes number[]
 ---@field prefixes number[]
 ---@field durability number
+---@field cooldown number
+---@field equipped boolean
 
 ---comment
 ---@param player PlayerState
@@ -352,6 +451,7 @@ local function get_shield(player, item)
 		result = result + PrefixTable[value].shield
 	end
 	for index, value in ipairs(w.suffixes) do
+		---@type number
 		result = result + SuffixTable[value].shield
 	end
 
@@ -361,7 +461,7 @@ end
 ---@param player PlayerState
 ---@param item number
 ---@return integer
-local function get_damage(player,item)
+local function get_melee_damage(player,item)
 	if item == nil then
 		return 0
 	end
@@ -372,10 +472,35 @@ local function get_damage(player,item)
 	local b = BaseItemTable[w.kind]
 	result = result + b.damage
 	for index, value in ipairs(w.prefixes) do
-		result = result + PrefixTable[value].add_damage
+		result = result + PrefixTable[value].melee_damage
 	end
 	for index, value in ipairs(w.suffixes) do
-		result = result + SuffixTable[value].add_damage
+		---@type number
+		result = result + SuffixTable[value].melee_damage
+	end
+
+	return result
+end
+
+---@param player PlayerState
+---@param item number
+---@return integer
+local function get_magic_damage(player,item)
+	if item == nil then
+		return 0
+	end
+
+	---@type number
+	local result = 0
+	local w = player.items[item]
+	local b = BaseItemTable[w.kind]
+	result = result + b.damage
+	for index, value in ipairs(w.prefixes) do
+		result = result + PrefixTable[value].magic_damage
+	end
+	for index, value in ipairs(w.suffixes) do
+		---@type number
+		result = result + SuffixTable[value].magic_damage
 	end
 
 	return result
@@ -398,6 +523,7 @@ local function get_speed_mod(player, item)
 		result = result + PrefixTable[value].speed_modifier
 	end
 	for index, value in ipairs(w.suffixes) do
+		---@type number
 		result = result + SuffixTable[value].speed_modifier
 	end
 
@@ -406,29 +532,18 @@ end
 
 ---@param player PlayerState
 local function update_damage_and_speed(player)
-	player.melee_damage = 1 + get_damage(player, player.weapon)
-	player.spell_damage = 1 + get_damage(player, player.boots)
+	player.melee_damage = 1 + get_melee_damage(player, player.weapon)
+	player.spell_damage = 1 + get_magic_damage(player, player.boots)
+	for i = 1, 10, 1 do
+		if player.rings[i] then
+			player.spell_damage = player.spell_damage + get_magic_damage(player, player.rings[i])
+		end
+	end
 	speed = 200 * (1 + get_speed_mod(player, player.weapon) + get_speed_mod(player, player.boots))
 end
 
 
-
-
-
-
-
----@class SkillData
----@field progress number
----@field completed boolean
-
----@type SkillData
-local action_data = {
-	progress = 0,
-	completed = true,
-}
-
-
----@class ActorModelDescription
+---@class (exact) ActorModelDescription
 ---@field size_x number
 ---@field size_y number
 ---@field image love.Image
@@ -442,7 +557,7 @@ local action_data = {
 
 
 
----@class ActorModelState
+---@class (exact) ActorModelState
 ---@field position number
 ---@field state ActorModelStateEnum
 ---@field walk_timer number
@@ -662,10 +777,10 @@ local function battle_panel(render, x, y)
 		progress_bar(bar_x, bar_y, bar_width, 7, hp, hp_view, max_hp, 0, "blue")
 	end
 
-	if player_state.current_action ==SkillEnum.BasicAttack then
-		basic_attack.draw(x, battle_y, action_data, basic_hero, player_model, base_camera_shift - actual_camera)
-	elseif  player_state.current_action == SkillEnum.Comet then
-		comet.draw(x, battle_y, action_data, basic_hero, player_model, base_camera_shift - actual_camera)
+	local action = player_state.current_action.used_skill
+	if action then
+		local skill = skills[action]
+		skill.draw(x, battle_y, player_state, basic_hero, player_model, base_camera_shift - actual_camera)
 	end
 
 	for index, value in ipairs(stage.enemies) do
@@ -683,12 +798,13 @@ local function battle_panel(render, x, y)
 		love.graphics.setColor(1, 1, 1, 1)
 		if value.impact and not value.discard then
 			local frame = math.floor(value.impact_progress * #value.desc.impact_frames)
+			local size_scale = value.size * (0.4 +0.6 * value.impact_progress)
 			love.graphics.draw(
 				value.desc.image,
 				value.desc.impact_frames[frame + 1],
-				base_camera_shift + x + value.position - actual_camera - value.desc.size_x / 2 * value.size * value.impact_progress,
-				battle_y - value.height - value.desc.size_y / 2 * value.size * value.impact_progress,
-				0, value.size * value.impact_progress, value.size * value.impact_progress
+				base_camera_shift + x + value.position - actual_camera - value.desc.size_x / 2 * size_scale,
+				battle_y - value.height - value.desc.size_y / 2 * size_scale,
+				0, size_scale, size_scale
 			)
 		elseif not value.discard then
 			local frame = 1
@@ -717,6 +833,19 @@ local stats_height = 29 * interface_grid
 local inventory_height = 23 * interface_grid
 
 local equip_bg = love.graphics.newImage("equip.png")
+
+local ring_xy = {
+	{1, 25},
+	{4, 26},
+	{7, 27},
+	{8, 24},
+	{8, 21},
+	{26, 21},
+	{26, 24},
+	{27, 27},
+	{30, 26},
+	{33, 25},
+}
 
 local function right_side_panel(render, mx, my)
 	love.graphics.setColor(0.1, 0.1, 0.1)
@@ -754,13 +883,39 @@ local function right_side_panel(render, mx, my)
 	if player_state.weapon then
 		local item = player_state.items[player_state.weapon]
 		local img = BaseItemTable[item.kind].image
-		love.graphics.draw(img, window_width - right_panel_width + interface_grid *2, interface_grid * 6, 0, scale, scale)
+		local item_x = window_width - right_panel_width + interface_grid *2
+		local item_y = interface_grid * 6
+		love.graphics.setColor(1, 1, 1)
+		love.graphics.draw(img, item_x, item_y, 0, scale, scale)
+		progress_bar(item_x, item_y, interface_grid * 6, 7, item.durability, item.durability, 1, 0, "blue")
 	end
 
 	if player_state.boots then
 		local item = player_state.items[player_state.boots]
 		local img = BaseItemTable[item.kind].image
-		love.graphics.draw(img, window_width - interface_grid *8, interface_grid *19, 0, scale, scale)
+		local item_x = window_width - interface_grid *8
+		local item_y = interface_grid *19
+		love.graphics.setColor(1, 1, 1)
+		love.graphics.draw(img, item_x, item_y, 0, scale, scale)
+		progress_bar(item_x, item_y, interface_grid * 6, 7, item.durability, item.durability, 1, 0, "blue")
+	end
+
+	for i = 1, 10, 1 do
+		local ring = player_state.rings[i]
+		if ring then
+			local item = player_state.items[ring]
+			local img = BaseItemTable[item.kind].image
+			local item_x  = window_width - right_panel_width + interface_grid + interface_grid * ring_xy[i][1]
+			local item_y = interface_grid  + interface_grid * ring_xy[i][2]
+			love.graphics.setColor(1, 1, 1)
+			love.graphics.draw(
+				img,
+				item_x, item_y,
+				0, scale / 3, scale / 3
+			)
+
+			progress_bar(item_x, item_y + interface_grid + 5, interface_grid * 2, 7, item.durability, item.durability, 1, 0, "blue")
+		end
 	end
 
 	local row = 0
@@ -770,6 +925,10 @@ local function right_side_panel(render, mx, my)
 	local y = interface_grid + equip_image_height + interface_grid + stats_height + interface_grid + interface_grid
 
 	for index, value in ipairs(player_state.items) do
+		if value.equipped then
+			goto continue
+		end
+
 		local item_x = x + column * interface_grid * 7
 		local item_y = y + row * interface_grid * 7
 
@@ -790,7 +949,7 @@ local function right_side_panel(render, mx, my)
 		love.graphics.setColor(1, 1, 1)
 		local kind = BaseItemTable[value.kind]
 		if kind.image_kind ==ItemImageSize.Small then
-			love.graphics.draw(kind.image, item_x, item_y)
+			love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
 		elseif kind.image_kind == ItemImageSize.Medium then
 			love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
 		elseif kind.image_kind == ItemImageSize.Large then
@@ -804,10 +963,27 @@ local function right_side_panel(render, mx, my)
 
 		if (not render) and rect_detection(item_x, item_y, interface_grid * 6, interface_grid * 6, mx, my) then
 			if BaseItemTable[value.kind].slot ==ItemSlot.Boots then
+				if player_state.boots then
+					player_state.items[player_state.boots].equipped = false
+				end
 				player_state.boots = index
+				value.equipped = true
 			end
 			if BaseItemTable[value.kind].slot ==ItemSlot.Weapon then
+				if player_state.weapon then
+					player_state.items[player_state.weapon].equipped = false
+				end
 				player_state.weapon = index
+				value.equipped = true
+			end
+			if BaseItemTable[value.kind].slot == ItemSlot.Ring then
+				for i = 1, 10, 1 do
+					if player_state.rings[i] == nil then
+						player_state.rings[i] = index
+						value.equipped = true
+						break
+					end
+				end
 			end
 			update_damage_and_speed(player_state)
 		end
@@ -820,6 +996,7 @@ local function right_side_panel(render, mx, my)
 			row = row + 1
 		end
 
+		::continue::
 	end
 end
 
@@ -877,6 +1054,31 @@ local reset_stage = true
 local enemy_speed = 200
 
 ---comment
+---@param player PlayerState
+---@param action ActionEnum
+---@param skill SkillEnum?
+---@param item number?
+local function switch_action (player, action, skill, item)
+	player.current_action.kind = action
+	player.current_action.used_item = item
+	player.current_action.used_skill = skill
+	player.current_action.completed = false
+	player.current_action.progress = 0
+
+	-- TODO: if spell, use spellcasting animation
+	player_model.state =ActorModelStateEnum.Attacking
+end
+
+---@param player PlayerState
+local function reset_action (player)
+	player.current_action.kind = ActionEnum.Nothing
+	player.current_action.used_item = nil
+	player.current_action.used_skill = nil
+	player.current_action.progress = 0
+	player.current_action.completed = false
+end
+
+---comment
 ---@param dt number
 function love.update(dt)
 
@@ -888,6 +1090,7 @@ function love.update(dt)
 	if (not fade_in) then
 		actual_camera = actual_camera + SMOOTHERSTEP(t) * dt * distance_from_camera * 2
 	elseif hp > 0 then
+		---@type number
 		distance_from_camera = stage.distance - actual_camera
 		actual_camera = actual_camera + SMOOTHERSTEP(t) * dt * distance_from_camera * 2
 	end
@@ -1003,7 +1206,9 @@ function love.update(dt)
 
 
 	player_model.state = ActorModelStateEnum.Idle
-	if player_state.current_action == nil then
+
+	local action = player_state.current_action
+	if action.kind == ActionEnum.Nothing then
 		-- Can we do a basic attack?
 		local action_chosen = false
 		for index, value in ipairs(stage.enemies) do
@@ -1011,20 +1216,57 @@ function love.update(dt)
 				goto continue
 			end
 
-			if value.position < player_model.position + basic_attack.activation_range(player_state) then
-				player_state.current_action = SkillEnum.BasicAttack
-				player_model.state = ActorModelStateEnum.Attacking
-				action_data.completed = false
-				action_data.progress = 0
+			-- check all available skills
+
+			-- Inherent:
+
+			if value.position < player_model.position + skills[SkillEnum.MeleeAttack].activation_range(player_state, basic_hero) then
+				switch_action(player_state, ActionEnum.ActivateSkill, SkillEnum.MeleeAttack, nil)
 				action_chosen = true
 				break
-			elseif  value.position < player_model.position + comet.activation_range(player_state) then
-				player_state.current_action = SkillEnum.Comet
-				-- TODO: replace with spellcasting
-				player_model.state = ActorModelStateEnum.Attacking
-				action_data.completed = false
-				action_data.progress = 0
-				action_chosen = true
+			end
+
+			-- From rings
+
+			for i = 1, 10, 1 do
+				local ring_index = player_state.rings[i]
+				if ring_index then
+					local ring = player_state.items[ring_index]
+					for _, affix in ipairs(ring.prefixes) do
+						local skill = PrefixTable[affix].allows_skill
+						if
+							skill
+							and value.position < player_model.position + skills[skill].activation_range(player_state, basic_hero)
+							and ring.cooldown == 0
+						then
+							switch_action(player_state, ActionEnum.ActivateItem, nil, ring_index)
+							action_chosen = true
+							break
+						end
+					end
+					if action_chosen then
+						break
+					end
+					for _, affix in ipairs(ring.suffixes) do
+						local skill = SuffixTable[affix].allows_skill
+						if
+							skill
+							and value.position < player_model.position + skills[skill].activation_range(player_state, basic_hero)
+							and ring.cooldown == 0
+						then
+							switch_action(player_state, ActionEnum.ActivateItem, nil, ring_index)
+							action_chosen = true
+							break
+						end
+
+					end
+					if action_chosen then
+						break
+					end
+				end
+			end
+
+			if action_chosen then
 				break
 			end
 
@@ -1042,20 +1284,35 @@ function love.update(dt)
 			end
 			player_model.position = player_model.position + move
 		end
-	elseif player_state.current_action ==SkillEnum.BasicAttack then
-		basic_attack.update(vfx_manager, stage, player_state, dt, player_model, action_data)
-		if action_data.completed then
-			action_data.progress = 0
-			action_data.completed = false
-			player_state.current_action = nil
+	elseif player_state.current_action.kind ==ActionEnum.ActivateSkill then
+		local skill_index = action.used_skill
+		assert(skill_index ~= nil)
+		local skill = skills[skill_index]
+		skill.update(vfx_manager, stage, player_state, dt, player_model, basic_hero, false)
+		if player_state.current_action.completed then
+			reset_action(player_state)
 		end
-	elseif player_state.current_action ==SkillEnum.Comet then
-		comet.update(vfx_manager, stage, player_state, dt, player_model, action_data)
-		if action_data.completed then
-			action_data.progress = 0
-			action_data.completed = false
-			player_state.current_action = nil
+	elseif player_state.current_action.kind ==ActionEnum.ActivateItem then
+		local item_index = action.used_item
+		assert(item_index)
+		local item = player_state.items[item_index]
+		item.durability = item.durability - 0.01
+		item.cooldown = ITEM_BASE_COOLDOWN
+		for index, value in ipairs(item.prefixes) do
+			local skill_index = PrefixTable[value].allows_skill
+			if skill_index then
+				local skill = skills[skill_index]
+				skill.update(vfx_manager, stage, player_state, dt, player_model, basic_hero, true)
+			end
 		end
+		for index, value in ipairs(item.suffixes) do
+			local skill_index = SuffixTable[value].allows_skill
+			if skill_index then
+				local skill = skills[skill_index]
+				skill.update(vfx_manager, stage, player_state, dt, player_model, basic_hero, true)
+			end
+		end
+		reset_action(player_state)
 	end
 
 	local decay = math.exp(-dt * 10)
@@ -1063,6 +1320,10 @@ function love.update(dt)
 
 	for index, value in ipairs(stage.enemies) do
 		value.view_hp = value.view_hp * decay + value.hp * (1 - decay)
+	end
+
+	for index, value in ipairs(player_state.items) do
+		value.cooldown = math.max(value.cooldown - dt, 0)
 	end
 end
 
