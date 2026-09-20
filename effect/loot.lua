@@ -28,7 +28,8 @@ local function generate_loot(rarity)
 		durability = 1,
 		equipped = false,
 		cooldown = 0,
-		invalid = false
+		invalid = false,
+		highlight_opacity = 1
 	}
 	local item_index = CREATE_ITEM(item)
 

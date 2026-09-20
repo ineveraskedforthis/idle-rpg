@@ -47,6 +47,9 @@ local rect_detection = require "ui.rect"
 local bg =love.graphics.newImage("bg-1200-500.png")
 local player_image = love.graphics.newImage("skeleton.png")
 local blob = love.graphics.newImage("blob.png")
+
+local blob_x, blob_y = blob:getDimensions()
+
 local inventory_slot_bg = love.graphics.newImage("inventory_slot.png")
 
 local portal_image = love.graphics.newImage("portal.png")
@@ -527,6 +530,7 @@ end
 ---@field prefixes number[]
 ---@field durability number
 ---@field cooldown number
+---@field highlight_opacity number
 ---@field equipped boolean
 ---@field invalid boolean
 
@@ -1083,7 +1087,22 @@ local function draw_item(req, x, y, item, true_size, draw_border, draw_bg)
 		love.graphics.draw(inventory_slot_bg, x, y, 0, scale, scale)
 	end
 
+
+	if req.render and item.id == selected_item.id then
+		border(req.render, x + 3, y + 3, border_width - 6, border_height - 6)
+		love.graphics.setColor(1, 1, 1, SMOOTHERSTEP(item_data.highlight_opacity) + 0.40 + 0.10 * math.sin(timer * 5))
+		love.graphics.draw(blob, x - 3, y - 3, 0, (border_width + 6) / blob_x, (border_height + 6) / blob_y)
+	end
+
 	if req.render then
+		love.graphics.setColor(0.9, 0.9, 0, SMOOTHERSTEP(item_data.highlight_opacity) * 0.5)
+		love.graphics.draw(blob, x - 3, y - 3, 0, (border_width + 6) / blob_x, (border_height + 6) / blob_y)
+	end
+
+	if req.render then
+		if rect_detection(x, y, border_width, border_height, req.mx, req.my) then
+			item_data.highlight_opacity = 0.5
+		end
 		local img = BaseItemTable[item_data.kind].image
 		love.graphics.setColor(1, 1, 1)
 		love.graphics.draw(img, x + offset_x, y, 0, scale_mult, scale_mult)
@@ -1097,12 +1116,14 @@ local function draw_item(req, x, y, item, true_size, draw_border, draw_bg)
 					equip_item(item)
 				end
 			end
+			item_data.highlight_opacity = 0.75
 		end
 	end
 
 	if req.render and draw_border then
 		border(req.render, x, y, border_width, border_height)
 	end
+
 
 	if req.render then
 		progress_bar(x, y + durability_offset, durability_width, 7, item_data.durability, item_data.durability, 1, 0, "blue")
@@ -1421,6 +1442,10 @@ function love.update(dt)
 
 	timer = timer + dt
 
+	for index, value in ipairs(ITEM_DB.data_array) do
+		value.highlight_opacity = math.max(value.highlight_opacity - dt, 0)
+	end
+
 	local distance_from_camera = player_model.position - actual_camera
 
 	local t = math.min(1, math.max(0, math.abs(distance_from_camera) / 50 - 1))
@@ -1666,8 +1691,6 @@ function love.update(dt)
 	for index, value in ipairs(ITEM_DB.data_array) do
 		value.cooldown = math.max(value.cooldown - dt, 0)
 	end
-
-
 end
 
 function love.draw()
