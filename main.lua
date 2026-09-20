@@ -138,6 +138,8 @@ INVALID_ITEM_INDEX = {
 	id = 0
 }
 
+local selected_item = INVALID_ITEM_INDEX
+
 local function UPDATE_AVAILABLE_ID()
 	local id_found = false
 	for i = ITEM_DB.available_id, #ITEM_DB.data_array, 1 do
@@ -261,22 +263,6 @@ local difficulty = 1
 local exp = 0
 local level = 1
 local magic_dust = 0
-
----comment
----@param req InterfaceRequest
----@param x any
----@param y any
-local function display_stats(req, x, y)
-	panel(req.render, x, y, 160, 130 )
-	if req.render then
-		love.graphics.print("Max HP: " .. tostring(max_hp), x + 10, y + 10)
-		love.graphics.print("Shield: " .. tostring(shield), x + 10, y + 30)
-		love.graphics.print("Speed: " .. tostring(speed), x + 10, y + 50)
-		love.graphics.print("Melee damage: " .. tostring(player_state.melee_damage), x + 10, y + 70)
-		love.graphics.print("Spell damage: " .. tostring(player_state.spell_damage), x + 10, y + 90)
-	end
-end
-
 
 ---@class (exact) Enemy
 ---@field hp number
@@ -941,6 +927,119 @@ local ring_xy = {
 	{33, 25},
 }
 
+---comment
+---@param req InterfaceRequest
+---@param x number
+---@param y number
+---@param item ItemIndex
+---@param true_size boolean
+local function draw_item(req, x, y, item, true_size)
+	local item_data = RETRIEVE_ITEM(item)
+	if not item_data then
+		return
+	end
+
+	local scale_mult = scale
+	local size_y = interface_grid * 6
+	local size_x = interface_grid * 6
+	local durability_offset = size_y - 7
+	local offset_x = 0
+	local slot = BaseItemTable[item_data.kind].slot
+	if true_size then
+		if  slot ==ItemSlot.Ring then
+			scale_mult = scale * 1 / 3
+			size_y = interface_grid * 2
+			size_x = interface_grid * 2
+			---@type number
+			durability_offset = interface_grid * 2
+		elseif  slot ==ItemSlot.Weapon then
+			size_y = interface_grid * 12
+			durability_offset = size_y - 7
+		end
+	else
+		if slot == ItemSlot.Boots then
+		elseif slot ==ItemSlot.Weapon then
+			size_x = size_x / 2
+			size_y = size_y / 2
+			scale_mult = scale / 2
+			offset_x = size_x / 2
+		end
+	end
+
+	if req.render then
+		local img = BaseItemTable[item_data.kind].image
+		love.graphics.setColor(1, 1, 1)
+		love.graphics.draw(img, x + offset_x, y, 0, scale_mult, scale_mult)
+		progress_bar(x, y + durability_offset, size_x, 7, item_data.durability, item_data.durability, 1, 0, "blue")
+	end
+end
+
+---@enum StatusTab
+StatusTab = {
+	Overview = 1,
+	Skills = 2,
+	Guilds = 3,
+	Item = 4,
+}
+
+---@type StatusTab
+local current_tab = StatusTab.Overview
+
+---comment
+---@param req InterfaceRequest
+---@param x any
+---@param y any
+local function display_stats(req, x, y)
+	panel(req.render, x, y, interface_grid * 34, interface_grid * 21 )
+	if req.render then
+		love.graphics.print("Max HP: " .. tostring(max_hp), x + 10, y + 10)
+		love.graphics.print("Shield: " .. tostring(shield), x + 10, y + 30)
+		love.graphics.print("Speed: " .. tostring(speed), x + 10, y + 50)
+		love.graphics.print("Melee damage: " .. tostring(player_state.melee_damage), x + 10, y + 70)
+		love.graphics.print("Spell damage: " .. tostring(player_state.spell_damage), x + 10, y + 90)
+	end
+end
+
+---@param req InterfaceRequest
+---@param x any
+---@param y any
+local function information_window(req, x, y)
+	local tabs_height = interface_grid * 6
+
+	local spacing = interface_grid * 4
+	local padding_left = interface_grid
+
+	if button(req.render, "Status", padding_left + x, y, interface_grid * 8, interface_grid * 4, req.mx, req.my ) then
+		current_tab = StatusTab.Overview
+		selected_item = INVALID_ITEM_INDEX
+	end
+	if button(req.render, "Skills", padding_left + x + interface_grid * 8 + spacing, y, interface_grid * 8, interface_grid * 4, req.mx, req.my) then
+		current_tab = StatusTab.Skills
+		selected_item = INVALID_ITEM_INDEX
+	end
+	if button(req.render, "Guilds", padding_left + x + interface_grid * 16 + spacing * 2, y, interface_grid * 8, interface_grid * 4, req.mx, req.my) then
+		current_tab = StatusTab.Guilds
+		selected_item = INVALID_ITEM_INDEX
+	end
+
+
+	local selected = RETRIEVE_ITEM(selected_item)
+	if selected then
+		current_tab = StatusTab.Item
+	end
+
+	if selected then
+		local item_view_x = interface_grid * 3
+		local item_view_y = interface_grid * 75
+	elseif current_tab == StatusTab.Overview then
+		display_stats(req, x, y + tabs_height)
+	elseif current_tab == StatusTab.Skills then
+
+	elseif current_tab == StatusTab.Guilds then
+
+	end
+end
+
 ---@param req InterfaceRequest
 local function right_side_panel(req)
 	if req.render then
@@ -971,51 +1070,15 @@ local function right_side_panel(req)
 		)
 	end
 
-
-	local weapon = RETRIEVE_ITEM(player_state.weapon)
-	if weapon then
-		local img = BaseItemTable[weapon.kind].image
-		local item_x = window_width - right_panel_width + interface_grid *2
-		local item_y = interface_grid * 6
-		if req.render then
-			love.graphics.setColor(1, 1, 1)
-			love.graphics.draw(img, item_x, item_y, 0, scale, scale)
-			progress_bar(item_x, item_y, interface_grid * 6, 7, weapon.durability, weapon.durability, 1, 0, "blue")
-		end
-	end
-
-	do
-		local item = RETRIEVE_ITEM(player_state.boots)
-		if item then
-			local img = BaseItemTable[item.kind].image
-			local item_x = window_width - interface_grid *8
-			local item_y = interface_grid *19
-
-			if req.render then
-				love.graphics.setColor(1, 1, 1)
-				love.graphics.draw(img, item_x, item_y, 0, scale, scale)
-				progress_bar(item_x, item_y, interface_grid * 6, 7, item.durability, item.durability, 1, 0, "blue")
-			end
-		end
-	end
-
+	draw_item(req, window_width - right_panel_width + interface_grid *2, interface_grid * 6, player_state.weapon, true)
+	draw_item(req, window_width - interface_grid *8, interface_grid *19, player_state.boots, true)
 	for i = 1, 10, 1 do
-		local item = RETRIEVE_ITEM(player_state.rings[i])
-		if item then
-			local img = BaseItemTable[item.kind].image
-			local item_x  = window_width - right_panel_width + interface_grid + interface_grid * ring_xy[i][1]
-			local item_y = interface_grid  + interface_grid * ring_xy[i][2]
-			if req.render then
-				love.graphics.setColor(1, 1, 1)
-				love.graphics.draw(
-					img,
-					item_x, item_y,
-					0, scale / 3, scale / 3
-				)
-				progress_bar(item_x, item_y + interface_grid + 5, interface_grid * 2, 7, item.durability, item.durability, 1, 0, "blue")
-			end
-		end
+		local item_x  = window_width - right_panel_width + interface_grid + interface_grid * ring_xy[i][1]
+		local item_y = interface_grid  + interface_grid * ring_xy[i][2]
+		draw_item(req, item_x, item_y, player_state.rings[i], true)
 	end
+
+	information_window(req, window_width - right_panel_width + interface_grid * 2, interface_grid * 44)
 
 	local row = 0
 	local column = 0
@@ -1046,16 +1109,17 @@ local function right_side_panel(req)
 				love.graphics.setColor(0.6, 0.1, 0)
 			end
 
+			draw_item(req, item_x, item_y, value, false)
 
 			love.graphics.setColor(1, 1, 1)
 			local kind = BaseItemTable[item.kind]
-			if kind.image_kind ==ItemImageSize.Small then
-				love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
-			elseif kind.image_kind == ItemImageSize.Medium then
-				love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
-			elseif kind.image_kind == ItemImageSize.Large then
-				love.graphics.draw(kind.image, item_x + interface_grid * 1.5, item_y, 0, 0.25, 0.25)
-			end
+			-- if kind.image_kind ==ItemImageSize.Small then
+			-- 	love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
+			-- elseif kind.image_kind == ItemImageSize.Medium then
+			-- 	love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
+			-- elseif kind.image_kind == ItemImageSize.Large then
+			-- 	love.graphics.draw(kind.image, item_x + interface_grid * 1.5, item_y, 0, 0.25, 0.25)
+			-- end
 			border(req.render, item_x, item_y, interface_grid * 6,  interface_grid * 6)
 			progress_bar(item_x + 5, item_y + interface_grid * 6 - 10, interface_grid * 6 - 10, 7, item.durability, item.durability, 1, 0, "blue")
 		elseif rect_detection(item_x, item_y, interface_grid * 6, interface_grid * 6, req.mx, req.my) then
@@ -1122,9 +1186,7 @@ local function  interface(req)
 	status_bar(req, 210, 10)
 	battle_panel(req, 0, 160)
 	change_difficulty(req, 110, 10)
-
 	right_side_panel(req)
-	display_stats(req, 630, 400)
 end
 
 local function generate_enemies()
