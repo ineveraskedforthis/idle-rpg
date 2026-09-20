@@ -6,6 +6,14 @@ local skills = require "skills._manager"
 
 ITEM_BASE_COOLDOWN = 0.3
 
+---@class InterfaceRequest
+---@field render boolean
+---@field mx number
+---@field my number
+---@field mouse_button number
+---@field presses number
+
+
 function CLAMP(x, a, b)
 	if (x < a) then
 		return a
@@ -104,18 +112,93 @@ ActionEnum = {
 ---@class (exact) Action
 ---@field kind ActionEnum
 ---@field used_skill SkillEnum?
----@field used_item number?
+---@field used_item ItemIndex
 ---@field progress number
 ---@field completed boolean
+
+---@class ItemDatabase
+---@field data_array Item[]
+---@field generation number[]
+---@field available_id number
+
+---@class ItemIndex
+---@field id number
+---@field generation number
+
+---@type ItemDatabase
+local ITEM_DB = {
+	data_array = {},
+	generation = {},
+	available_id = 1
+}
+
+---@type ItemIndex
+INVALID_ITEM_INDEX = {
+	generation = 0,
+	id = 0
+}
+
+local function UPDATE_AVAILABLE_ID()
+	local id_found = false
+	for i = ITEM_DB.available_id, #ITEM_DB.data_array, 1 do
+		if ITEM_DB.data_array[i].invalid then
+			ITEM_DB.available_id = i
+			id_found = true
+		end
+	end
+	if not id_found then
+		ITEM_DB.available_id = #ITEM_DB.generation + 1
+		ITEM_DB.generation[ITEM_DB.available_id] = 1
+	end
+end
+
+---comment
+---@param item Item
+---@return ItemIndex
+function CREATE_ITEM(item)
+	---@type ItemIndex
+	local result = {
+		id = ITEM_DB.available_id,
+		generation = ITEM_DB.generation[ITEM_DB.available_id]
+	}
+	ITEM_DB.data_array[ITEM_DB.available_id] = item
+	UPDATE_AVAILABLE_ID()
+	return result
+end
+
+---comment
+---@param index ItemIndex
+function DELETE_ITEM(index)
+	assert(ITEM_DB.generation[index.id] == index.generation)
+	ITEM_DB.generation[index.id] = ITEM_DB.generation[index.id] + 1
+	ITEM_DB.data_array[index.id].invalid = true
+	UPDATE_AVAILABLE_ID()
+end
+
+---comment
+---@param index ItemIndex|nil
+---@return Item|nil
+function  RETRIEVE_ITEM(index)
+	if index == nil then
+		return nil
+	end
+	if index.id == 0 then
+		return nil
+	end
+	if index.generation ~= ITEM_DB.generation[index.id] then
+		return nil
+	end
+	return ITEM_DB.data_array[index.id]
+end
 
 ---@class (exact) PlayerState
 ---@field attack_range number
 ---@field melee_damage number
 ---@field spell_damage number
----@field items Item[]
----@field rings number[]
----@field weapon number|nil
----@field boots number|nil
+---@field stash ItemIndex[]
+---@field rings ItemIndex[]
+---@field weapon ItemIndex
+---@field boots ItemIndex
 ---@field mastery MasteryState
 ---@field current_action Action
 
@@ -127,21 +210,34 @@ ActionEnum = {
 ---@type PlayerState
 local player_state = {
 	attack_range = 0,
-	items = {},
+	stash = {},
 	melee_damage = 0,
 	spell_damage = 0,
-	rings = {},
+	rings = {
+		INVALID_ITEM_INDEX,
+		INVALID_ITEM_INDEX,
+		INVALID_ITEM_INDEX,
+		INVALID_ITEM_INDEX,
+		INVALID_ITEM_INDEX,
+		INVALID_ITEM_INDEX,
+		INVALID_ITEM_INDEX,
+		INVALID_ITEM_INDEX,
+		INVALID_ITEM_INDEX,
+		INVALID_ITEM_INDEX,
+	},
 	mastery = {
 		melee_weapon = 0,
 		general_magic = 0
 	},
 	current_action = {
 		kind = ActionEnum.Nothing,
-		used_item = nil,
+		used_item = INVALID_ITEM_INDEX,
 		used_skill = nil,
 		progress = 0,
 		completed = true,
-	}
+	},
+	weapon = INVALID_ITEM_INDEX,
+	boots = INVALID_ITEM_INDEX
 }
 
 ---@enum ActorModelStateEnum
@@ -166,9 +262,13 @@ local exp = 0
 local level = 1
 local magic_dust = 0
 
-local function display_stats(render, x, y)
-	panel(render, x, y, 160, 130 )
-	if render then
+---comment
+---@param req InterfaceRequest
+---@param x any
+---@param y any
+local function display_stats(req, x, y)
+	panel(req.render, x, y, 160, 130 )
+	if req.render then
 		love.graphics.print("Max HP: " .. tostring(max_hp), x + 10, y + 10)
 		love.graphics.print("Shield: " .. tostring(shield), x + 10, y + 30)
 		love.graphics.print("Speed: " .. tostring(speed), x + 10, y + 50)
@@ -432,19 +532,17 @@ end
 ---@field durability number
 ---@field cooldown number
 ---@field equipped boolean
+---@field invalid boolean
 
----comment
----@param player PlayerState
----@param item number
+---@param item ItemIndex
 ---@return integer
-local function get_shield(player, item)
-	if item == nil then
-		return 0
-	end
-
+local function get_shield(item)
 	---@type number
 	local result = 0
-	local w = player.items[item]
+	local w = RETRIEVE_ITEM(item)
+	if not w then
+		return 0
+	end
 	local b = BaseItemTable[w.kind]
 	result = result + b.shield
 	for index, value in ipairs(w.prefixes) do
@@ -458,17 +556,15 @@ local function get_shield(player, item)
 	return result
 end
 
----@param player PlayerState
----@param item number
+---@param item ItemIndex
 ---@return integer
-local function get_melee_damage(player,item)
-	if item == nil then
-		return 0
-	end
-
+local function get_melee_damage(item)
 	---@type number
 	local result = 0
-	local w = player.items[item]
+	local w = RETRIEVE_ITEM(item)
+	if not w then
+		return 0
+	end
 	local b = BaseItemTable[w.kind]
 	result = result + b.damage
 	for index, value in ipairs(w.prefixes) do
@@ -482,17 +578,15 @@ local function get_melee_damage(player,item)
 	return result
 end
 
----@param player PlayerState
----@param item number
+---@param item ItemIndex
 ---@return integer
-local function get_magic_damage(player,item)
-	if item == nil then
-		return 0
-	end
-
+local function get_magic_damage(item)
 	---@type number
 	local result = 0
-	local w = player.items[item]
+	local w = RETRIEVE_ITEM(item)
+	if not w then
+		return 0
+	end
 	local b = BaseItemTable[w.kind]
 	result = result + b.damage
 	for index, value in ipairs(w.prefixes) do
@@ -506,17 +600,15 @@ local function get_magic_damage(player,item)
 	return result
 end
 
----@param player PlayerState
----@param item number
+---@param item ItemIndex
 ---@return integer
-local function get_speed_mod(player, item)
-	if item == nil then
-		return 0
-	end
-
+local function get_speed_mod(item)
 	---@type number
 	local result = 0
-	local w = player.items[item]
+	local w = RETRIEVE_ITEM(item)
+	if not w then
+		return 0
+	end
 	local b = BaseItemTable[w.kind]
 	result = result + b.speed_modifier
 	for index, value in ipairs(w.prefixes) do
@@ -532,14 +624,12 @@ end
 
 ---@param player PlayerState
 local function update_damage_and_speed(player)
-	player.melee_damage = 1 + get_melee_damage(player, player.weapon)
-	player.spell_damage = 1 + get_magic_damage(player, player.boots)
+	player.melee_damage = 1 + get_melee_damage(player.weapon)
+	player.spell_damage = 1 + get_magic_damage(player.boots)
 	for i = 1, 10, 1 do
-		if player.rings[i] then
-			player.spell_damage = player.spell_damage + get_magic_damage(player, player.rings[i])
-		end
+		player.spell_damage = player.spell_damage + get_magic_damage(player.rings[i])
 	end
-	speed = 200 * (1 + get_speed_mod(player, player.weapon) + get_speed_mod(player, player.boots))
+	speed = 200 * (1 + get_speed_mod(player.weapon) + get_speed_mod(player.boots))
 end
 
 
@@ -697,8 +787,6 @@ local function draw_character(x, y, model, state, camera_shift, orientation)
 	end
 end
 
--- local current_skill = nil
-
 local function character_widget(render, x, y)
 	panel(render, x, y, 100, 120)
 
@@ -713,8 +801,11 @@ local function character_widget(render, x, y)
 	progress_bar(x + 3, y + 99, 94, 17, hp, hp_view, max_hp, shield, "blue" )
 end
 
-local function status_bar(render, x, y)
-	panel (render, x, y, 400, 120)
+---@param req InterfaceRequest
+---@param x number
+---@param y number
+local function status_bar(req, x, y)
+	panel (req.render, x, y, 400, 120)
 	love.graphics.print("Skeleton lvl 1", x + 20, y + 20)
 end
 
@@ -726,16 +817,19 @@ local fade_in = false
 local fade_progress = 1
 
 ---comment
----@param render boolean
+---@param req InterfaceRequest
 ---@param x number
 ---@param y number
-local function battle_panel(render, x, y)
+local function battle_panel(req, x, y)
+	if not req.render then
+		return
+	end
+
 	local battle_y = y + 240
 
 	love.graphics.setColor(1, 1, 1, 1)
 	love.graphics.draw(bg, x  - actual_camera % 1200, y)
 	love.graphics.draw(bg, x  - actual_camera % 1200+ 1200, y)
-
 	do
 		local frame = math.floor(timer * 5) % 5
 		love.graphics.draw(portal_image, portal_quads[frame + 1], base_camera_shift + x - actual_camera, y + 180, 0, 1, 1)
@@ -847,74 +941,79 @@ local ring_xy = {
 	{33, 25},
 }
 
-local function right_side_panel(render, mx, my)
-	love.graphics.setColor(0.1, 0.1, 0.1)
-	love.graphics.rectangle("fill", window_width - right_panel_width, 0, right_panel_width, window_height)
-	border(render, window_width - right_panel_width, 0, right_panel_width, window_height)
-
-	love.graphics.setColor(1, 1, 1)
-	love.graphics.draw(equip_bg, window_width - right_panel_width + interface_grid, interface_grid, 0, scale, scale)
-	border(render,  window_width - right_panel_width + interface_grid, interface_grid, right_panel_width_no_margins, equip_image_height)
-
-	style.header_font()
-
-	love.graphics.setColor(0, 0, 0)
-	love.graphics.printf("Equipment", window_width - right_panel_width, interface_grid * 1.5, right_panel_width, "center")
-
-	panel(
-		render,
-		window_width - right_panel_width + interface_grid,
-		interface_grid + equip_image_height + interface_grid,
-		right_panel_width_no_margins,
-		stats_height,
-		true
-	)
-
-	panel(
-		render,
-		window_width - right_panel_width + interface_grid,
-		interface_grid + equip_image_height + interface_grid + stats_height + interface_grid,
-		right_panel_width_no_margins,
-		inventory_height,
-		true
-	)
-
-	love.graphics.setColor(1, 1, 1)
-	if player_state.weapon then
-		local item = player_state.items[player_state.weapon]
-		local img = BaseItemTable[item.kind].image
-		local item_x = window_width - right_panel_width + interface_grid *2
-		local item_y = interface_grid * 6
+---@param req InterfaceRequest
+local function right_side_panel(req)
+	if req.render then
+		love.graphics.setColor(0.1, 0.1, 0.1)
+		love.graphics.rectangle("fill", window_width - right_panel_width, 0, right_panel_width, window_height)
+		border(req.render, window_width - right_panel_width, 0, right_panel_width, window_height)
 		love.graphics.setColor(1, 1, 1)
-		love.graphics.draw(img, item_x, item_y, 0, scale, scale)
-		progress_bar(item_x, item_y, interface_grid * 6, 7, item.durability, item.durability, 1, 0, "blue")
+		love.graphics.draw(equip_bg, window_width - right_panel_width + interface_grid, interface_grid, 0, scale, scale)
+		border(req.render,  window_width - right_panel_width + interface_grid, interface_grid, right_panel_width_no_margins, equip_image_height)
+		style.header_font()
+		love.graphics.setColor(0, 0, 0)
+		love.graphics.printf("Equipment", window_width - right_panel_width, interface_grid * 1.5, right_panel_width, "center")
+		panel(
+			req.render,
+			window_width - right_panel_width + interface_grid,
+			interface_grid + equip_image_height + interface_grid,
+			right_panel_width_no_margins,
+			stats_height,
+			true
+		)
+		panel(
+			req.render,
+			window_width - right_panel_width + interface_grid,
+			interface_grid + equip_image_height + interface_grid + stats_height + interface_grid,
+			right_panel_width_no_margins,
+			inventory_height,
+			true
+		)
 	end
 
-	if player_state.boots then
-		local item = player_state.items[player_state.boots]
-		local img = BaseItemTable[item.kind].image
-		local item_x = window_width - interface_grid *8
-		local item_y = interface_grid *19
-		love.graphics.setColor(1, 1, 1)
-		love.graphics.draw(img, item_x, item_y, 0, scale, scale)
-		progress_bar(item_x, item_y, interface_grid * 6, 7, item.durability, item.durability, 1, 0, "blue")
+
+	local weapon = RETRIEVE_ITEM(player_state.weapon)
+	if weapon then
+		local img = BaseItemTable[weapon.kind].image
+		local item_x = window_width - right_panel_width + interface_grid *2
+		local item_y = interface_grid * 6
+		if req.render then
+			love.graphics.setColor(1, 1, 1)
+			love.graphics.draw(img, item_x, item_y, 0, scale, scale)
+			progress_bar(item_x, item_y, interface_grid * 6, 7, weapon.durability, weapon.durability, 1, 0, "blue")
+		end
+	end
+
+	do
+		local item = RETRIEVE_ITEM(player_state.boots)
+		if item then
+			local img = BaseItemTable[item.kind].image
+			local item_x = window_width - interface_grid *8
+			local item_y = interface_grid *19
+
+			if req.render then
+				love.graphics.setColor(1, 1, 1)
+				love.graphics.draw(img, item_x, item_y, 0, scale, scale)
+				progress_bar(item_x, item_y, interface_grid * 6, 7, item.durability, item.durability, 1, 0, "blue")
+			end
+		end
 	end
 
 	for i = 1, 10, 1 do
-		local ring = player_state.rings[i]
-		if ring then
-			local item = player_state.items[ring]
+		local item = RETRIEVE_ITEM(player_state.rings[i])
+		if item then
 			local img = BaseItemTable[item.kind].image
 			local item_x  = window_width - right_panel_width + interface_grid + interface_grid * ring_xy[i][1]
 			local item_y = interface_grid  + interface_grid * ring_xy[i][2]
-			love.graphics.setColor(1, 1, 1)
-			love.graphics.draw(
-				img,
-				item_x, item_y,
-				0, scale / 3, scale / 3
-			)
-
-			progress_bar(item_x, item_y + interface_grid + 5, interface_grid * 2, 7, item.durability, item.durability, 1, 0, "blue")
+			if req.render then
+				love.graphics.setColor(1, 1, 1)
+				love.graphics.draw(
+					img,
+					item_x, item_y,
+					0, scale / 3, scale / 3
+				)
+				progress_bar(item_x, item_y + interface_grid + 5, interface_grid * 2, 7, item.durability, item.durability, 1, 0, "blue")
+			end
 		end
 	end
 
@@ -924,71 +1023,70 @@ local function right_side_panel(render, mx, my)
 	local x = window_width - right_panel_width + interface_grid + interface_grid
 	local y = interface_grid + equip_image_height + interface_grid + stats_height + interface_grid + interface_grid
 
-	for index, value in ipairs(player_state.items) do
-		if value.equipped then
+	for index, value in ipairs(player_state.stash) do
+		local item = RETRIEVE_ITEM(value)
+		if not item or item.equipped then
 			goto continue
 		end
 
 		local item_x = x + column * interface_grid * 7
 		local item_y = y + row * interface_grid * 7
 
-		local affixes_count = #value.prefixes + #value.suffixes
+		local affixes_count = #item.prefixes + #item.suffixes
 
-		love.graphics.setColor(1, 1, 1)
-		love.graphics.draw(inventory_slot_bg, item_x, item_y, 0, scale, scale)
+		if req.render then
+			love.graphics.setColor(1, 1, 1)
+			love.graphics.draw(inventory_slot_bg, item_x, item_y, 0, scale, scale)
 
-		if affixes_count == 0 then
-			love.graphics.setColor(0, 0, 0)
-		elseif affixes_count <= 2 then
-			love.graphics.setColor(0, 0, 0.5)
-		else
-			love.graphics.setColor(0.6, 0.1, 0)
-		end
-
-
-		love.graphics.setColor(1, 1, 1)
-		local kind = BaseItemTable[value.kind]
-		if kind.image_kind ==ItemImageSize.Small then
-			love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
-		elseif kind.image_kind == ItemImageSize.Medium then
-			love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
-		elseif kind.image_kind == ItemImageSize.Large then
-			love.graphics.draw(kind.image, item_x + interface_grid * 1.5, item_y, 0, 0.25, 0.25)
-		end
-		border(render, item_x, item_y, interface_grid * 6,  interface_grid * 6)
-
-		if player_state.weapon == index or player_state.boots == index then
-			border(render, item_x + 5, item_y + 5, interface_grid * 6 - 10, interface_grid * 6 - 10)
-		end
-
-		if (not render) and rect_detection(item_x, item_y, interface_grid * 6, interface_grid * 6, mx, my) then
-			if BaseItemTable[value.kind].slot ==ItemSlot.Boots then
-				if player_state.boots then
-					player_state.items[player_state.boots].equipped = false
-				end
-				player_state.boots = index
-				value.equipped = true
+			if affixes_count == 0 then
+				love.graphics.setColor(0, 0, 0)
+			elseif affixes_count <= 2 then
+				love.graphics.setColor(0, 0, 0.5)
+			else
+				love.graphics.setColor(0.6, 0.1, 0)
 			end
-			if BaseItemTable[value.kind].slot ==ItemSlot.Weapon then
-				if player_state.weapon then
-					player_state.items[player_state.weapon].equipped = false
-				end
-				player_state.weapon = index
-				value.equipped = true
+
+
+			love.graphics.setColor(1, 1, 1)
+			local kind = BaseItemTable[item.kind]
+			if kind.image_kind ==ItemImageSize.Small then
+				love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
+			elseif kind.image_kind == ItemImageSize.Medium then
+				love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
+			elseif kind.image_kind == ItemImageSize.Large then
+				love.graphics.draw(kind.image, item_x + interface_grid * 1.5, item_y, 0, 0.25, 0.25)
 			end
-			if BaseItemTable[value.kind].slot == ItemSlot.Ring then
+			border(req.render, item_x, item_y, interface_grid * 6,  interface_grid * 6)
+			progress_bar(item_x + 5, item_y + interface_grid * 6 - 10, interface_grid * 6 - 10, 7, item.durability, item.durability, 1, 0, "blue")
+		elseif rect_detection(item_x, item_y, interface_grid * 6, interface_grid * 6, req.mx, req.my) then
+			if BaseItemTable[item.kind].slot ==ItemSlot.Boots then
+				local current_boots = RETRIEVE_ITEM(player_state.boots)
+				if current_boots then
+					current_boots.equipped = false
+				end
+				player_state.boots = value
+				item.equipped = true
+			end
+			if BaseItemTable[item.kind].slot ==ItemSlot.Weapon then
+				local current_weapon = RETRIEVE_ITEM(player_state.weapon)
+				if current_weapon then
+					current_weapon.equipped = false
+				end
+				player_state.weapon = value
+				item.equipped = true
+			end
+			if BaseItemTable[item.kind].slot == ItemSlot.Ring then
 				for i = 1, 10, 1 do
-					if player_state.rings[i] == nil then
-						player_state.rings[i] = index
-						value.equipped = true
+					local ring = RETRIEVE_ITEM (player_state.rings[i])
+					if not ring then
+						player_state.rings[i] = value
+						item.equipped = true
 						break
 					end
 				end
 			end
 			update_damage_and_speed(player_state)
 		end
-
-		progress_bar(item_x + 5, item_y + interface_grid * 6 - 10, interface_grid * 6 - 10, 7, value.durability, value.durability, 1, 0, "blue")
 
 		column = column + 1
 		if column >= 5 then
@@ -1000,25 +1098,33 @@ local function right_side_panel(render, mx, my)
 	end
 end
 
-local function change_difficulty(render, x, y, mx, my)
-	panel(render, x, y, 80, 80)
-	if button(render, "+", x+5, y+5, 30, 30, mx, my, false) then
+---comment
+---@param req InterfaceRequest
+---@param x any
+---@param y any
+local function change_difficulty(req, x, y)
+	panel(req.render, x, y, 80, 80)
+	if button(req.render, "+", x+5, y+5, 30, 30, req.mx, req.my, false) then
 		difficulty = difficulty + 1
 	end
-	if button(render, "-", x+45, y+5, 30, 30, mx, my, false) then
+	if button(req.render, "-", x+45, y+5, 30, 30, req.mx, req.my, false) then
 		difficulty = math.max(1, difficulty - 1)
 	end
-	love.graphics.print("Level: " .. tostring(difficulty), x + 5, y + 37)
+	if req.render then
+		love.graphics.print("Level: " .. tostring(difficulty), x + 5, y + 37)
+	end
 end
 
-local function  interface(render, mx, my)
-	character_widget(render, 10, 10)
-	status_bar(render, 210, 10)
-	battle_panel(render, 0, 160)
-	change_difficulty(render, 110, 10, mx, my)
+---comment
+---@param req InterfaceRequest
+local function  interface(req)
+	character_widget(req, 10, 10)
+	status_bar(req, 210, 10)
+	battle_panel(req, 0, 160)
+	change_difficulty(req, 110, 10)
 
-	right_side_panel(render, mx, my)
-	display_stats(render, 630, 400)
+	right_side_panel(req)
+	display_stats(req, 630, 400)
 end
 
 local function generate_enemies()
@@ -1057,7 +1163,7 @@ local enemy_speed = 200
 ---@param player PlayerState
 ---@param action ActionEnum
 ---@param skill SkillEnum?
----@param item number?
+---@param item ItemIndex
 local function switch_action (player, action, skill, item)
 	player.current_action.kind = action
 	player.current_action.used_item = item
@@ -1072,7 +1178,7 @@ end
 ---@param player PlayerState
 local function reset_action (player)
 	player.current_action.kind = ActionEnum.Nothing
-	player.current_action.used_item = nil
+	player.current_action.used_item = INVALID_ITEM_INDEX
 	player.current_action.used_skill = nil
 	player.current_action.progress = 0
 	player.current_action.completed = false
@@ -1101,7 +1207,10 @@ function love.update(dt)
 		fade_in = true
 		player_model.position = 0
 		hp = max_hp
-		shield = get_shield(player_state, player_state.weapon) + get_shield(player_state, player_state.boots)
+		shield = get_shield(player_state.weapon) + get_shield(player_state.boots)
+		for i = 1, 10, 1 do
+			shield = shield + get_shield(player_state.rings[i])
+		end
 		stage.distance = math.sqrt(difficulty) * 1000
 	end
 
@@ -1221,7 +1330,7 @@ function love.update(dt)
 			-- Inherent:
 
 			if value.position < player_model.position + skills[SkillEnum.MeleeAttack].activation_range(player_state, basic_hero) then
-				switch_action(player_state, ActionEnum.ActivateSkill, SkillEnum.MeleeAttack, nil)
+				switch_action(player_state, ActionEnum.ActivateSkill, SkillEnum.MeleeAttack, INVALID_ITEM_INDEX)
 				action_chosen = true
 				break
 			end
@@ -1230,8 +1339,8 @@ function love.update(dt)
 
 			for i = 1, 10, 1 do
 				local ring_index = player_state.rings[i]
-				if ring_index then
-					local ring = player_state.items[ring_index]
+				local ring = RETRIEVE_ITEM(ring_index)
+				if ring then
 					for _, affix in ipairs(ring.prefixes) do
 						local skill = PrefixTable[affix].allows_skill
 						if
@@ -1294,8 +1403,8 @@ function love.update(dt)
 		end
 	elseif player_state.current_action.kind ==ActionEnum.ActivateItem then
 		local item_index = action.used_item
-		assert(item_index)
-		local item = player_state.items[item_index]
+		local item = RETRIEVE_ITEM(item_index)
+		assert(item)
 		item.durability = item.durability - 0.01
 		item.cooldown = ITEM_BASE_COOLDOWN
 		for index, value in ipairs(item.prefixes) do
@@ -1322,17 +1431,67 @@ function love.update(dt)
 		value.view_hp = value.view_hp * decay + value.hp * (1 - decay)
 	end
 
-	for index, value in ipairs(player_state.items) do
+	---@type number[]
+	local items_to_remove = {}
+	for index, value in ipairs(ITEM_DB.data_array) do
 		value.cooldown = math.max(value.cooldown - dt, 0)
+		if value.durability <= 0 and not value.invalid then
+			table.insert(items_to_remove, index)
+		end
+	end
+
+	-- clear all references to removed items:
+	-- datacontainer-sama, save me...
+	for index, value in ipairs(items_to_remove) do
+		if player_state.boots.id == value then
+			player_state.boots = INVALID_ITEM_INDEX
+		end
+		if player_state.weapon.id == value then
+			player_state.weapon = INVALID_ITEM_INDEX
+		end
+		for ring_number = 1, 10, 1 do
+			if player_state.rings[ring_number].id == value then
+				player_state.rings[ring_number] = INVALID_ITEM_INDEX
+			end
+		end
 	end
 end
 
 function love.draw()
 	love.graphics.setBackgroundColor(0.75, 0.75, 0.75, 1)
 	local x, y = love.mouse.getPosition()
-	interface(true, x, y)
+	local button_pressed = MouseButton.None
+	if love.mouse.isDown(1) then
+		button_pressed = MouseButton.Left
+	end
+	interface({
+		mouse_button = button_pressed,
+		mx = x, my = y,
+		presses = 0,
+		render = true
+	})
 end
 
-function love.mousepressed(x, y, button, istouch, presses)
-	interface(false, x, y)
+---@enum MouseButton
+MouseButton = {
+	Left = 1,
+	Right = 2,
+	Middle = 3,
+	None = 4,
+}
+
+---comment
+---@param x number
+---@param y number
+---@param mouse_button MouseButton
+---@param istouch boolean
+---@param presses number
+function love.mousepressed(x, y, mouse_button, istouch, presses)
+	interface({
+		mouse_button = mouse_button,
+		mx = x,
+		my = y,
+		presses = presses,
+		render = false
+	})
 end

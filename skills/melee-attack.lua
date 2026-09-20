@@ -11,9 +11,9 @@ end
 local description = {
 	activation_range =function (player, player_model)
 		local attack_range = 10
-		if player.weapon then
-			local w = player.items[player.weapon]
-			local b = BaseItemTable[w.kind]
+		local weapon = RETRIEVE_ITEM(player.weapon)
+		if weapon then
+			local b = BaseItemTable[weapon.kind]
 			attack_range = b.range
 		end
 		return attack_range / 2 + player_model.size_x / 2
@@ -35,9 +35,9 @@ local description = {
 	end,
 	update =function (vfx, stage, player, dt, model, model_description, skip_casting)
 		local attack_range = 10 + model_description.size_x / 2
-		if player.weapon then
-			local w = player.items[player.weapon]
-			local b = BaseItemTable[w.kind]
+		local weapon = RETRIEVE_ITEM(player.weapon)
+		if weapon then
+			local b = BaseItemTable[weapon.kind]
 			attack_range = b.range + model_description.size_x / 2
 		end
 
@@ -45,10 +45,10 @@ local description = {
 		data.progress = data.progress + dt
 		if data.progress >= 1 then
 			flat_aoe(vfx, stage, model.position - model_description.size_x / 2, model.position + attack_range, player.melee_damage)
-			if (player.weapon) then
-				local old_durability = player.items[player.weapon].durability
+			if (weapon) then
+				local old_durability = weapon.durability
 				local next_durability = old_durability - 0.01
-				player.items[player.weapon].durability = math.max(0, next_durability)
+				weapon.durability = math.max(0, next_durability)
 			end
 			data.progress = 0
 			data.completed = true

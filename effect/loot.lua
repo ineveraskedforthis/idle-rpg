@@ -18,6 +18,7 @@ end
 
 ---comment
 ---@param rarity number
+---@return ItemIndex
 local function generate_loot(rarity)
 	---@type Item
 	local item = {
@@ -26,8 +27,10 @@ local function generate_loot(rarity)
 		prefixes = {},
 		durability = 1,
 		equipped = false,
-		cooldown = 0
+		cooldown = 0,
+		invalid = false
 	}
+	local item_index = CREATE_ITEM(item)
 
 	local mods = rarity
 
@@ -83,21 +86,22 @@ local function generate_loot(rarity)
 		::continue::
 	end
 
-	return item
+	return item_index
 end
 
 ---@param state PlayerState
 ---@param difficulty number
 local function loot_enemy(state, difficulty)
 	local inventory = 0
-	for index, value in ipairs(state.items) do
-		if not value.equipped then
+	for index, value in ipairs(state.stash) do
+		local item = RETRIEVE_ITEM(value)
+		if item and not item.equipped then
 			inventory = inventory + 1
 		end
 	end
 	if love.math.random() < 10.2 and inventory < 15 then
 		local item = generate_loot(love.math.random() * 4 * difficulty)
-		table.insert(state.items, item)
+		table.insert(state.stash, item)
 	end
 end
 
