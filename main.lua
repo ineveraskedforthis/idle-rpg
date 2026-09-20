@@ -128,7 +128,7 @@ ActionEnum = {
 ---@type ItemDatabase
 local ITEM_DB = {
 	data_array = {},
-	generation = {},
+	generation = {1},
 	available_id = 1
 }
 
@@ -142,16 +142,18 @@ local selected_item = INVALID_ITEM_INDEX
 
 local function UPDATE_AVAILABLE_ID()
 	local id_found = false
-	for i = ITEM_DB.available_id, #ITEM_DB.data_array, 1 do
-		if ITEM_DB.data_array[i].invalid then
+	for i = 1, #ITEM_DB.generation, 1 do
+		if ITEM_DB.data_array[i] == nil or ITEM_DB.data_array[i].invalid then
 			ITEM_DB.available_id = i
 			id_found = true
+			break
 		end
 	end
 	if not id_found then
 		ITEM_DB.available_id = #ITEM_DB.generation + 1
 		ITEM_DB.generation[ITEM_DB.available_id] = 1
 	end
+	print("AVAILABLE", ITEM_DB.available_id)
 end
 
 ---comment
@@ -163,6 +165,7 @@ function CREATE_ITEM(item)
 		id = ITEM_DB.available_id,
 		generation = ITEM_DB.generation[ITEM_DB.available_id]
 	}
+	print("CREATE", ITEM_DB.available_id)
 	ITEM_DB.data_array[ITEM_DB.available_id] = item
 	UPDATE_AVAILABLE_ID()
 	return result
@@ -172,9 +175,16 @@ end
 ---@param index ItemIndex
 function DELETE_ITEM(index)
 	assert(ITEM_DB.generation[index.id] == index.generation)
+	print("DELETE", index.id)
 	ITEM_DB.generation[index.id] = ITEM_DB.generation[index.id] + 1
 	ITEM_DB.data_array[index.id].invalid = true
 	UPDATE_AVAILABLE_ID()
+end
+
+---comment
+---@param index ItemIndex
+local function print_index(index)
+	print("ID: ", index.id, " | Generation: ", index.generation)
 end
 
 ---comment
@@ -927,13 +937,100 @@ local ring_xy = {
 	{33, 25},
 }
 
+---@param item ItemIndex
+local function unequip_item(item)
+	local inventory = 0
+	for index, value in ipairs(player_state.stash) do
+		local item = RETRIEVE_ITEM(value)
+		if item and not item.equipped then
+			inventory = inventory + 1
+		end
+	end
+
+	if inventory >= 15 then
+		return
+	end
+
+	local data = RETRIEVE_ITEM(item)
+	if data == nil then
+		return
+	end
+	if not data.equipped then
+		return
+	end
+	local slot = BaseItemTable[data.kind].slot
+	if slot ==ItemSlot.Boots then
+		if player_state.boots.id == item.id then
+			data.equipped = false
+			player_state.boots = INVALID_ITEM_INDEX
+		end
+	end
+	if slot ==ItemSlot.Weapon then
+		if player_state.weapon.id == item.id then
+			data.equipped = false
+			player_state.weapon = INVALID_ITEM_INDEX
+		end
+	end
+	if slot == ItemSlot.Ring then
+		for i = 1, 10, 1 do
+			if player_state.rings[i].id == item.id then
+				data.equipped = false
+				player_state.rings[i] = INVALID_ITEM_INDEX
+			end
+		end
+	end
+	update_damage_and_speed(player_state)
+end
+
+---@param item ItemIndex
+local function equip_item(item)
+	local data = RETRIEVE_ITEM(item)
+	if data == nil then
+		return
+	end
+	if data.equipped then
+		return
+	end
+	local slot = BaseItemTable[data.kind].slot
+	if slot ==ItemSlot.Boots then
+		local current_boots = RETRIEVE_ITEM(player_state.boots)
+		if current_boots then
+			current_boots.equipped = false
+		end
+		player_state.boots = item
+		data.equipped = true
+	end
+	if slot ==ItemSlot.Weapon then
+		local current_weapon = RETRIEVE_ITEM(player_state.weapon)
+		if current_weapon then
+			current_weapon.equipped = false
+		end
+		player_state.weapon = item
+		data.equipped = true
+	end
+	if slot == ItemSlot.Ring then
+		for i = 1, 10, 1 do
+			local ring = RETRIEVE_ITEM (player_state.rings[i])
+			if not ring then
+				player_state.rings[i] = item
+				data.equipped = true
+				break
+			end
+		end
+	end
+	update_damage_and_speed(player_state)
+end
+
+
 ---comment
 ---@param req InterfaceRequest
 ---@param x number
 ---@param y number
 ---@param item ItemIndex
 ---@param true_size boolean
-local function draw_item(req, x, y, item, true_size)
+---@param draw_border boolean
+---@param draw_bg boolean
+local function draw_item(req, x, y, item, true_size, draw_border, draw_bg)
 	local item_data = RETRIEVE_ITEM(item)
 	if not item_data then
 		return
@@ -943,8 +1040,11 @@ local function draw_item(req, x, y, item, true_size)
 	local size_y = interface_grid * 6
 	local size_x = interface_grid * 6
 	local durability_offset = size_y - 7
+	local durability_width = size_x
 	local offset_x = 0
 	local slot = BaseItemTable[item_data.kind].slot
+	local border_width = interface_grid * 6
+	local border_height = interface_grid * 6
 	if true_size then
 		if  slot ==ItemSlot.Ring then
 			scale_mult = scale * 1 / 3
@@ -952,9 +1052,13 @@ local function draw_item(req, x, y, item, true_size)
 			size_x = interface_grid * 2
 			---@type number
 			durability_offset = interface_grid * 2
+			durability_width = interface_grid * 2
+			border_height = interface_grid * 2
+			border_width = interface_grid *2
 		elseif  slot ==ItemSlot.Weapon then
 			size_y = interface_grid * 12
 			durability_offset = size_y - 7
+			border_height = interface_grid * 12
 		end
 	else
 		if slot == ItemSlot.Boots then
@@ -966,11 +1070,42 @@ local function draw_item(req, x, y, item, true_size)
 		end
 	end
 
+	if req.render and draw_bg then
+		love.graphics.setColor(1, 1, 1)
+		local affixes_count = #item_data.prefixes + #item_data.suffixes
+		if affixes_count == 0 then
+			love.graphics.setColor(1, 1, 1)
+		elseif affixes_count <= 2 then
+			love.graphics.setColor(1, 1, 1.5)
+		else
+			love.graphics.setColor(1.6, 1.1, 1)
+		end
+		love.graphics.draw(inventory_slot_bg, x, y, 0, scale, scale)
+	end
+
 	if req.render then
 		local img = BaseItemTable[item_data.kind].image
 		love.graphics.setColor(1, 1, 1)
 		love.graphics.draw(img, x + offset_x, y, 0, scale_mult, scale_mult)
-		progress_bar(x, y + durability_offset, size_x, 7, item_data.durability, item_data.durability, 1, 0, "blue")
+	else
+		if rect_detection(x, y, border_width, border_height, req.mx, req.my) then
+			print (req.mouse_button, req.presses)
+			if req.mouse_button == MouseButton.Left  then
+				if req.presses <= 1 then
+					selected_item = item
+				else
+					equip_item(item)
+				end
+			end
+		end
+	end
+
+	if req.render and draw_border then
+		border(req.render, x, y, border_width, border_height)
+	end
+
+	if req.render then
+		progress_bar(x, y + durability_offset, durability_width, 7, item_data.durability, item_data.durability, 1, 0, "blue")
 	end
 end
 
@@ -1000,9 +1135,49 @@ local function display_stats(req, x, y)
 	end
 end
 
+---comment
 ---@param req InterfaceRequest
 ---@param x any
 ---@param y any
+local function display_item_description(req, x, y)
+	panel(req.render, x, y, interface_grid * 34, interface_grid * 21 )
+
+	local selected = RETRIEVE_ITEM(selected_item)
+	assert (selected)
+
+	local kind = BaseItemTable[selected.kind]
+
+	draw_item(req, x + interface_grid, y + interface_grid, selected_item, false, true, true)
+
+	border(req.render, x + interface_grid * 8, y + interface_grid, interface_grid * 16, interface_grid * 6)
+	-- border (req.render, x + interface_grid * (8 + 16 + 1), y + interface_grid, interface_grid * 8, interface_grid * 3)
+	-- border (req.render, x + interface_grid * (8 + 16 + 1), y + interface_grid + interface_grid * 3, interface_grid * 8, interface_grid * 3)
+
+	if req.render then
+		love.graphics.setColor(0, 0, 0, 1)
+		style.header_font()
+		love.graphics.printf(kind.name, x + interface_grid * 8, y + interface_grid * 2, interface_grid * 16, "center")
+		style.font(1)
+	end
+
+	if selected.equipped then
+		if button(req.render, "Unequip", x + interface_grid * (8 + 16 + 1), y + interface_grid * (1), interface_grid * 8, interface_grid * 3, req.mx, req.my) then
+			unequip_item(selected_item)
+		end
+	else
+		if button(req.render, "Equip", x + interface_grid * (8 + 16 + 1), y + interface_grid * (1), interface_grid * 8, interface_grid * 3, req.mx, req.my) then
+			equip_item(selected_item)
+		end
+	end
+
+	if button(req.render, "Destroy", x + interface_grid * (8 + 16 + 1), y + interface_grid + interface_grid * 3, interface_grid * 8, interface_grid * 3, req.mx, req.my) then
+		selected.durability = 0
+	end
+end
+
+---@param req InterfaceRequest
+---@param x number
+---@param y number
 local function information_window(req, x, y)
 	local tabs_height = interface_grid * 6
 
@@ -1026,11 +1201,12 @@ local function information_window(req, x, y)
 	local selected = RETRIEVE_ITEM(selected_item)
 	if selected then
 		current_tab = StatusTab.Item
+	else
+		current_tab = StatusTab.Overview
 	end
 
-	if selected then
-		local item_view_x = interface_grid * 3
-		local item_view_y = interface_grid * 75
+	if current_tab == StatusTab.Item then
+		display_item_description(req, x, y + tabs_height)
 	elseif current_tab == StatusTab.Overview then
 		display_stats(req, x, y + tabs_height)
 	elseif current_tab == StatusTab.Skills then
@@ -1070,12 +1246,12 @@ local function right_side_panel(req)
 		)
 	end
 
-	draw_item(req, window_width - right_panel_width + interface_grid *2, interface_grid * 6, player_state.weapon, true)
-	draw_item(req, window_width - interface_grid *8, interface_grid *19, player_state.boots, true)
+	draw_item(req, window_width - right_panel_width + interface_grid *2, interface_grid * 6, player_state.weapon, true, false, false)
+	draw_item(req, window_width - interface_grid *8, interface_grid *19, player_state.boots, true, false, false)
 	for i = 1, 10, 1 do
 		local item_x  = window_width - right_panel_width + interface_grid + interface_grid * ring_xy[i][1]
 		local item_y = interface_grid  + interface_grid * ring_xy[i][2]
-		draw_item(req, item_x, item_y, player_state.rings[i], true)
+		draw_item(req, item_x, item_y, player_state.rings[i], true, false, false)
 	end
 
 	information_window(req, window_width - right_panel_width + interface_grid * 2, interface_grid * 44)
@@ -1094,63 +1270,7 @@ local function right_side_panel(req)
 
 		local item_x = x + column * interface_grid * 7
 		local item_y = y + row * interface_grid * 7
-
-		local affixes_count = #item.prefixes + #item.suffixes
-
-		if req.render then
-			love.graphics.setColor(1, 1, 1)
-			love.graphics.draw(inventory_slot_bg, item_x, item_y, 0, scale, scale)
-
-			if affixes_count == 0 then
-				love.graphics.setColor(0, 0, 0)
-			elseif affixes_count <= 2 then
-				love.graphics.setColor(0, 0, 0.5)
-			else
-				love.graphics.setColor(0.6, 0.1, 0)
-			end
-
-			draw_item(req, item_x, item_y, value, false)
-
-			love.graphics.setColor(1, 1, 1)
-			local kind = BaseItemTable[item.kind]
-			-- if kind.image_kind ==ItemImageSize.Small then
-			-- 	love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
-			-- elseif kind.image_kind == ItemImageSize.Medium then
-			-- 	love.graphics.draw(kind.image, item_x, item_y, 0, 0.5, 0.5)
-			-- elseif kind.image_kind == ItemImageSize.Large then
-			-- 	love.graphics.draw(kind.image, item_x + interface_grid * 1.5, item_y, 0, 0.25, 0.25)
-			-- end
-			border(req.render, item_x, item_y, interface_grid * 6,  interface_grid * 6)
-			progress_bar(item_x + 5, item_y + interface_grid * 6 - 10, interface_grid * 6 - 10, 7, item.durability, item.durability, 1, 0, "blue")
-		elseif rect_detection(item_x, item_y, interface_grid * 6, interface_grid * 6, req.mx, req.my) then
-			if BaseItemTable[item.kind].slot ==ItemSlot.Boots then
-				local current_boots = RETRIEVE_ITEM(player_state.boots)
-				if current_boots then
-					current_boots.equipped = false
-				end
-				player_state.boots = value
-				item.equipped = true
-			end
-			if BaseItemTable[item.kind].slot ==ItemSlot.Weapon then
-				local current_weapon = RETRIEVE_ITEM(player_state.weapon)
-				if current_weapon then
-					current_weapon.equipped = false
-				end
-				player_state.weapon = value
-				item.equipped = true
-			end
-			if BaseItemTable[item.kind].slot == ItemSlot.Ring then
-				for i = 1, 10, 1 do
-					local ring = RETRIEVE_ITEM (player_state.rings[i])
-					if not ring then
-						player_state.rings[i] = value
-						item.equipped = true
-						break
-					end
-				end
-			end
-			update_damage_and_speed(player_state)
-		end
+		draw_item(req, item_x, item_y, value, false, true, false)
 
 		column = column + 1
 		if column >= 5 then
@@ -1246,9 +1366,58 @@ local function reset_action (player)
 	player.current_action.completed = false
 end
 
+local function validate_items()
+	---@type ItemIndex[]
+	local items_to_remove = {}
+	for index, value in ipairs(ITEM_DB.data_array) do
+		if value.durability <= 0 and not value.invalid then
+			---@type ItemIndex
+			local to_remove = {
+				id = index,
+				generation = ITEM_DB.generation[index]
+			}
+			table.insert(items_to_remove, to_remove)
+		end
+	end
+
+	-- clear all references to removed items:
+	-- datacontainer-sama, save me...
+	for index, value in ipairs(items_to_remove) do
+		if player_state.boots.id == value then
+			player_state.boots = INVALID_ITEM_INDEX
+		end
+		if player_state.weapon.id == value then
+			player_state.weapon = INVALID_ITEM_INDEX
+		end
+		for ring_number = 1, 10, 1 do
+			if player_state.rings[ring_number].id == value then
+				player_state.rings[ring_number] = INVALID_ITEM_INDEX
+			end
+		end
+
+		local in_stash = nil
+		for stash_index, existing_value in ipairs(player_state.stash) do
+			if existing_value.id == value then
+				in_stash = stash_index
+			end
+		end
+
+		if in_stash then
+			table.remove(player_state.stash, in_stash)
+		end
+
+		if selected_item.id == value.id then
+			selected_item = INVALID_ITEM_INDEX
+		end
+
+		DELETE_ITEM(value)
+	end
+end
+
 ---comment
 ---@param dt number
 function love.update(dt)
+	validate_items()
 
 	timer = timer + dt
 
@@ -1493,30 +1662,12 @@ function love.update(dt)
 		value.view_hp = value.view_hp * decay + value.hp * (1 - decay)
 	end
 
-	---@type number[]
-	local items_to_remove = {}
+
 	for index, value in ipairs(ITEM_DB.data_array) do
 		value.cooldown = math.max(value.cooldown - dt, 0)
-		if value.durability <= 0 and not value.invalid then
-			table.insert(items_to_remove, index)
-		end
 	end
 
-	-- clear all references to removed items:
-	-- datacontainer-sama, save me...
-	for index, value in ipairs(items_to_remove) do
-		if player_state.boots.id == value then
-			player_state.boots = INVALID_ITEM_INDEX
-		end
-		if player_state.weapon.id == value then
-			player_state.weapon = INVALID_ITEM_INDEX
-		end
-		for ring_number = 1, 10, 1 do
-			if player_state.rings[ring_number].id == value then
-				player_state.rings[ring_number] = INVALID_ITEM_INDEX
-			end
-		end
-	end
+
 end
 
 function love.draw()

@@ -99,10 +99,12 @@ local function loot_enemy(state, difficulty)
 			inventory = inventory + 1
 		end
 	end
-	if love.math.random() < 10.2 and inventory < 15 then
+	if love.math.random() < 0.33 and inventory < 15 then
 		local item = generate_loot(love.math.random() * 4 * difficulty)
 		table.insert(state.stash, item)
+		return item
 	end
+	return nil
 end
 
 return loot_enemy

@@ -45,7 +45,7 @@ return {
 	end,
 
 	active_element_bg_passive = function ()
-		love.graphics.setColor(0.9, 0.9, 0.9, 0.95)
+		love.graphics.setColor(0.99, 0.9, 0.9, 0.99)
 	end,
 
 	panel_bg = function ()
