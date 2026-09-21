@@ -2,7 +2,8 @@ local base_unit = 5
 
 local font_path = "assets/alte-din-1451-mittelschrift/din1451alt.ttf"
 
-local readable_font = "assets/Baskervville/static/Baskervville-Regular.ttf"
+-- local readable_font = "assets/Baskervville/static/Baskervville-Regular.ttf"
+local readable_font = "assets/Libre_Caslon_Text/LibreCaslonText-Regular.ttf"
 
 ---@type love.Font[]
 local font_by_size = {}
@@ -14,9 +15,19 @@ for i = 1, 10, 1 do
 	size = size * 1.618
 end
 
+---@type love.Font[]
+local readable_font_by_size = {}
+size = 10
+
+for i = 1, 10, 1 do
+	readable_font_by_size[i] = love.graphics.newFont(readable_font, math.floor(size))
+	size = size * 1.618
+end
+
 -- local default_font = font_by_size[1]
 local default_font = love.graphics.newFont(readable_font, 16)
 local conversation_font = love.graphics.newFont("assets/Baskervville/static/Baskervville-Italic.ttf", 16)
+local item_name_font = love.graphics.newFont(readable_font, math.floor(12))
 local header_font = love.graphics.newFont(readable_font, math.floor(12 * 1.618))
 
 return {
@@ -80,7 +91,15 @@ return {
 		love.graphics.setFont(header_font)
 	end,
 
+	item_name_font = function ()
+		love.graphics.setFont(item_name_font)
+	end,
+
 	font = function (x)
 		love.graphics.setFont(font_by_size[math.max(1, math.min(math.floor(x), 10))])
+	end,
+
+	readable_font = function (x)
+		love.graphics.setFont(readable_font_by_size[math.max(1, math.min(math.floor(x), 10))])
 	end
 }

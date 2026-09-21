@@ -409,7 +409,7 @@ end
 
 register_boots("Boots", love.graphics.newImage("boots.png"), 1.1, 5)
 register_weapon("Knife", love.graphics.newImage("knife.png"), 2, 2.25, 0)
-register_ring("ShieldRing", love.graphics.newImage("ring.png"), 5)
+register_ring("Ring", love.graphics.newImage("ring.png"), 5)
 
 
 ---@class (exact) ItemAffix
@@ -470,12 +470,12 @@ do
 		pack_size = 0,
 		speed_modifier = 0,
 		rarity = 1,
-		melee_damage = 1,
+		melee_damage = 0,
 		shield = 0,
 		can_roll_for_armor = false,
 		can_roll_for_ring = false,
 		can_roll_for_weapon = true,
-		magic_damage = 0,
+		magic_damage = 1,
 		is_prefix = true
 	}
 	table.insert(AffixTable, item)
@@ -639,7 +639,7 @@ end
 ---@param player PlayerState
 local function update_damage_and_speed(player)
 	player.melee_damage = 1 + get_melee_damage(player.weapon)
-	player.spell_damage = 1 + get_magic_damage(player.boots)
+	player.spell_damage = 1 + get_magic_damage(player.boots) + get_magic_damage(player.weapon)
 	for i = 1, 10, 1 do
 		player.spell_damage = player.spell_damage + get_magic_damage(player.rings[i])
 	end
@@ -1183,28 +1183,55 @@ local function display_item_description(req, x, y)
 
 	draw_item(req, x + interface_grid, y + interface_grid, selected_item, false, true, true)
 
-	border(req.render, x + interface_grid * 8, y + interface_grid, interface_grid * 16, interface_grid * 6)
-	-- border (req.render, x + interface_grid * (8 + 16 + 1), y + interface_grid, interface_grid * 8, interface_grid * 3)
-	-- border (req.render, x + interface_grid * (8 + 16 + 1), y + interface_grid + interface_grid * 3, interface_grid * 8, interface_grid * 3)
+	-- border(req.render, x + interface_grid, y + interface_grid * 8, interface_grid * 32, interface_grid * 6)
+	-- border(req.render, x + interface_grid, y + interface_grid * 14, interface_grid * 32, interface_grid * 6)
+
 
 	if req.render then
 		love.graphics.setColor(0, 0, 0, 1)
-		style.header_font()
-		love.graphics.printf(kind.name, x + interface_grid * 8, y + interface_grid * 2, interface_grid * 16, "center")
-		style.font(1)
+		-- style.font(1)
+		local name = ""
+
+		for index, value in ipairs(selected.affixes) do
+			local data = AffixTable[value.affix_index]
+			if data.is_prefix then
+				name = name .. data.name .. " (" .. tostring(value.amount) .. ") "
+			end
+		end
+
+		name = name .. kind.name .. " "
+
+		for index, value in ipairs(selected.affixes) do
+			local data = AffixTable[value.affix_index]
+			if not data.is_prefix then
+				name = name .. data.name .. " (" .. tostring(value.amount) .. ") "
+			end
+		end
+
+		style.item_name_font()
+		love.graphics.printf(name, x + interface_grid, y + interface_grid * 14, interface_grid * 32, "center")
+
+		love.graphics.print("Shield: ", x + interface_grid, y + interface_grid * 8)
+		love.graphics.printf(get_shield(selected_item), x + interface_grid, y + interface_grid * 8, interface_grid * 14, "right")
+		love.graphics.print("Speed: ", x + interface_grid, y + interface_grid * 10)
+		love.graphics.printf(get_speed_mod(selected_item), x + interface_grid, y + interface_grid * 10, interface_grid * 14, "right")
+		love.graphics.print("MDMG: ", x + interface_grid * 18, y + interface_grid * 8)
+		love.graphics.printf(get_melee_damage(selected_item), x + interface_grid * 18, y + interface_grid * 8, interface_grid * 14, "right")
+		love.graphics.print("SDMG: ", x + interface_grid * 18, y + interface_grid * 10)
+		love.graphics.printf(get_magic_damage(selected_item), x + interface_grid * 18, y + interface_grid * 10, interface_grid * 14, "right")
 	end
 
 	if selected.equipped then
-		if button(req.render, "Unequip", x + interface_grid * (8 + 16 + 1), y + interface_grid * (1), interface_grid * 8, interface_grid * 3, req.mx, req.my) then
+		if button(req.render, "Unequip", x + interface_grid * (8 ), y + interface_grid * (1), interface_grid * 10, interface_grid * 3, req.mx, req.my) then
 			unequip_item(selected_item)
 		end
 	else
-		if button(req.render, "Equip", x + interface_grid * (8 + 16 + 1), y + interface_grid * (1), interface_grid * 8, interface_grid * 3, req.mx, req.my) then
+		if button(req.render, "Equip", x + interface_grid * (8), y + interface_grid * (1), interface_grid * 10, interface_grid * 3, req.mx, req.my) then
 			equip_item(selected_item)
 		end
 	end
 
-	if button(req.render, "Destroy", x + interface_grid * (8 + 16 + 1), y + interface_grid + interface_grid * 3, interface_grid * 8, interface_grid * 3, req.mx, req.my) then
+	if button(req.render, "Destroy", x + interface_grid * (8), y + interface_grid + interface_grid * 3, interface_grid * 10, interface_grid * 3, req.mx, req.my) then
 		selected.durability = 0
 	end
 end
@@ -1354,7 +1381,7 @@ local function generate_enemies()
 			view_hp = 3 + difficulty,
 			max_hp = 3 + difficulty,
 			model = big_rat,
-			position = math.sqrt(love.math.random() + 0.5) * stage.distance,
+			position = math.sqrt(love.math.random() + 0.15) * stage.distance,
 			damage = difficulty,
 			attack_progress = 0,
 			is_attacking = false,
@@ -1370,6 +1397,15 @@ end
 function love.load()
 	love.window.setTitle("Endless Ledge")
 	generate_enemies()
+
+	require "effect.loot"(player_state, 100)
+	require "effect.loot"(player_state, 100)
+	require "effect.loot"(player_state, 100)
+	require "effect.loot"(player_state, 100)
+	require "effect.loot"(player_state, 100)
+	require "effect.loot"(player_state, 100)
+	require "effect.loot"(player_state, 100)
+	require "effect.loot"(player_state, 100)
 end
 
 local reset_stage = true
@@ -1557,7 +1593,7 @@ function love.update(dt)
 		for i = 1, 10, 1 do
 			shield = shield + get_shield(player_state.rings[i])
 		end
-		stage.distance = math.sqrt(difficulty) * 1000
+		stage.distance = 2500
 	end
 
 	if reset_stage then
