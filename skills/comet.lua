@@ -27,7 +27,7 @@ local def = {
 	draw = function (x, y, data, actor_model, actor_position, camera_shift)
 
 	end,
-	update = function (vfx, stage, player, dt, model, model_description, skip_casting)
+	update = function (vfx, stage, player, dt, model, model_description, skip_casting, magnitude)
 		local data = player.current_action
 		data.progress = data.progress + dt
 		if skip_casting then
@@ -50,20 +50,22 @@ local def = {
 				::continue::
 			end
 			if target then
-				---@type Projectile
-				local projectile = {
-					desc = comet_projectile_desc,
-					height = 300 + (math.random() - 0.5) * 100,
-					position = model.position + (math.random() - 0.5) * 50,
-					size = 4,
-					speed = 1000,
-					target = stage.enemies[target].position + (math.random() - 0.5) * 200,
-					discard = false,
-					impact = false,
-					impact_progress = 0,
-					damage = player.spell_damage,
-				}
-				table.insert(stage.projectiles, projectile)
+				for i = 1, magnitude do
+					---@type Projectile
+					local projectile = {
+						desc = comet_projectile_desc,
+						height = 300 + (math.random() - 0.5) * 100,
+						position = model.position + (math.random() - 0.5) * 50,
+						size = 4,
+						speed = 1000,
+						target = stage.enemies[target].position + (math.random() - 0.5) * 200,
+						discard = false,
+						impact = false,
+						impact_progress = 0,
+						damage = player.spell_damage,
+					}
+					table.insert(stage.projectiles, projectile)
+				end
 			end
 
 			data.progress = 0

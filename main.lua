@@ -5,6 +5,7 @@ local aoe = require "effect.aoe-flat"
 local skills = require "skills._manager"
 
 ITEM_BASE_COOLDOWN = 0.3
+MICROCOOLDOWN = 1 / 60
 
 ---@class InterfaceRequest
 ---@field render boolean
@@ -216,6 +217,9 @@ end
 ---@field boots ItemIndex
 ---@field mastery MasteryState
 ---@field current_action Action
+---@field items_queue Action[]
+---@field micro_cooldown_item_activation number
+---@field item_skills_queue number[]
 
 ---@class (exact) MasteryState
 ---@field melee_weapon number
@@ -251,8 +255,11 @@ local player_state = {
 		progress = 0,
 		completed = true,
 	},
+	items_queue = {},
 	weapon = INVALID_ITEM_INDEX,
-	boots = INVALID_ITEM_INDEX
+	boots = INVALID_ITEM_INDEX,
+	micro_cooldown_item_activation = 0,
+	item_skills_queue = {}
 }
 
 ---@enum ActorModelStateEnum
@@ -417,11 +424,10 @@ register_ring("ShieldRing", love.graphics.newImage("ring.png"), 5)
 ---@field can_roll_for_weapon boolean
 ---@field can_roll_for_armor boolean
 ---@field can_roll_for_ring boolean
+---@field is_prefix boolean
 
 ---@type ItemAffix[]
-SuffixTable = {}
----@type ItemAffix[]
-PrefixTable = {}
+AffixTable = {}
 
 do
 	---@type ItemAffix
@@ -435,9 +441,10 @@ do
 		can_roll_for_armor = true,
 		can_roll_for_weapon = false,
 		can_roll_for_ring = false,
-		shield = 0
+		shield = 0,
+		is_prefix = true
 	}
-	table.insert(PrefixTable, item)
+	table.insert(AffixTable, item)
 end
 do
 	---@type ItemAffix
@@ -452,8 +459,9 @@ do
 		can_roll_for_ring = false,
 		can_roll_for_weapon = true,
 		magic_damage = 0,
+		is_prefix = true
 	}
-	table.insert(PrefixTable, item)
+	table.insert(AffixTable, item)
 end
 do
 	---@type ItemAffix
@@ -468,8 +476,9 @@ do
 		can_roll_for_ring = false,
 		can_roll_for_weapon = true,
 		magic_damage = 0,
+		is_prefix = true
 	}
-	table.insert(PrefixTable, item)
+	table.insert(AffixTable, item)
 end
 do
 	---@type ItemAffix
@@ -485,8 +494,9 @@ do
 		can_roll_for_weapon =false,
 		magic_damage = 0,
 		melee_damage =0,
+		is_prefix = false
 	}
-	table.insert(SuffixTable, item)
+	table.insert(AffixTable, item)
 end
 do
 	---@type ItemAffix
@@ -502,8 +512,9 @@ do
 		can_roll_for_weapon = false,
 		magic_damage = 0,
 		melee_damage = 0,
+		is_prefix = false
 	}
-	table.insert(SuffixTable, item)
+	table.insert(AffixTable, item)
 end
 do
 	---@type ItemAffix
@@ -519,20 +530,39 @@ do
 		can_roll_for_weapon = false,
 		magic_damage = 1,
 		melee_damage = 0,
-		allows_skill = SkillEnum.Comet
+		allows_skill = SkillEnum.Comet,
+		is_prefix = false
 	}
-	table.insert(SuffixTable, item)
+	table.insert(AffixTable, item)
 end
+
+---@class AffixInstance
+---@field amount number
+---@field affix_index number
 
 ---@class (exact) Item
 ---@field kind number
----@field suffixes number[]
----@field prefixes number[]
+---@field affixes AffixInstance[]
 ---@field durability number
 ---@field cooldown number
 ---@field highlight_opacity number
 ---@field equipped boolean
 ---@field invalid boolean
+
+---@param item ItemIndex
+---@return integer
+local function calculate_affixes(item)
+	---@type number
+	local result = 0
+	local w = RETRIEVE_ITEM(item)
+	if not w then
+		return 0
+	end
+	for index, value in ipairs(w.affixes) do
+		result = result + value.amount
+	end
+	return result
+end
 
 ---@param item ItemIndex
 ---@return integer
@@ -545,12 +575,8 @@ local function get_shield(item)
 	end
 	local b = BaseItemTable[w.kind]
 	result = result + b.shield
-	for index, value in ipairs(w.prefixes) do
-		result = result + PrefixTable[value].shield
-	end
-	for index, value in ipairs(w.suffixes) do
-		---@type number
-		result = result + SuffixTable[value].shield
+	for index, value in ipairs(w.affixes) do
+		result = result + AffixTable[value.affix_index].shield * value.amount
 	end
 
 	return result
@@ -567,12 +593,8 @@ local function get_melee_damage(item)
 	end
 	local b = BaseItemTable[w.kind]
 	result = result + b.damage
-	for index, value in ipairs(w.prefixes) do
-		result = result + PrefixTable[value].melee_damage
-	end
-	for index, value in ipairs(w.suffixes) do
-		---@type number
-		result = result + SuffixTable[value].melee_damage
+	for index, value in ipairs(w.affixes) do
+		result = result + AffixTable[value.affix_index].melee_damage * value.amount
 	end
 
 	return result
@@ -589,12 +611,8 @@ local function get_magic_damage(item)
 	end
 	local b = BaseItemTable[w.kind]
 	result = result + b.damage
-	for index, value in ipairs(w.prefixes) do
-		result = result + PrefixTable[value].magic_damage
-	end
-	for index, value in ipairs(w.suffixes) do
-		---@type number
-		result = result + SuffixTable[value].magic_damage
+	for index, value in ipairs(w.affixes) do
+		result = result + AffixTable[value.affix_index].magic_damage * value.amount
 	end
 
 	return result
@@ -611,12 +629,8 @@ local function get_speed_mod(item)
 	end
 	local b = BaseItemTable[w.kind]
 	result = result + b.speed_modifier
-	for index, value in ipairs(w.prefixes) do
-		result = result + PrefixTable[value].speed_modifier
-	end
-	for index, value in ipairs(w.suffixes) do
-		---@type number
-		result = result + SuffixTable[value].speed_modifier
+	for index, value in ipairs(w.affixes) do
+		result = result + AffixTable[value.affix_index].speed_modifier * value.amount
 	end
 
 	return result
@@ -792,7 +806,6 @@ local function character_widget(render, x, y)
 
 	style.default_font()
 	style.default_font_color()
-	-- love.graphics.print("Character widget")
 
 	panel(render, x + 3, y + 3, 94, 94 )
 	love.graphics.setColor(1, 1, 1, 1)
@@ -1076,7 +1089,7 @@ local function draw_item(req, x, y, item, true_size, draw_border, draw_bg)
 
 	if req.render and draw_bg then
 		love.graphics.setColor(1, 1, 1)
-		local affixes_count = #item_data.prefixes + #item_data.suffixes
+		local affixes_count = calculate_affixes(item)
 		if affixes_count == 0 then
 			love.graphics.setColor(1, 1, 1)
 		elseif affixes_count <= 2 then
@@ -1379,6 +1392,20 @@ local function switch_action (player, action, skill, item)
 end
 
 ---@param player PlayerState
+---@param item ItemIndex
+local function schedule_item_action (player, item)
+	assert(RETRIEVE_ITEM(item))
+	---@type Action
+	local action = {
+		completed = false,
+		progress = 0,
+		kind = ActionEnum.ActivateItem,
+		used_item = item
+	}
+	table.insert(player.items_queue, action)
+end
+
+---@param player PlayerState
 local function reset_action (player)
 	player.current_action.kind = ActionEnum.Nothing
 	player.current_action.used_item = INVALID_ITEM_INDEX
@@ -1433,6 +1460,69 @@ local function validate_items()
 
 		DELETE_ITEM(value)
 	end
+end
+
+---comment
+---@param enemy Enemy
+---@param skill SkillDefinition
+---@return boolean
+local function can_use_skill (enemy, skill)
+	return enemy.position < player_model.position + skill.activation_range(player_state, basic_hero)
+end
+
+---comment
+---@param item ItemIndex
+---@param target Enemy
+local function process_item_skills(item, target)
+
+	if player_state.micro_cooldown_item_activation > 0 then
+		return false
+	end
+
+	local data = RETRIEVE_ITEM(item)
+	if not data then
+		return
+	end
+	if data.cooldown > 0 then
+		return false
+	end
+
+
+	for _, affix in ipairs(data.affixes) do
+		local skill = AffixTable[affix.affix_index].allows_skill
+		if skill and can_use_skill (target, skills[skill]) then
+			schedule_item_action(player_state, item)
+			data.cooldown = ITEM_BASE_COOLDOWN
+			player_state.micro_cooldown_item_activation = player_state.micro_cooldown_item_activation + MICROCOOLDOWN
+			return true
+		end
+	end
+
+	return false
+end
+
+local function schedule_skill_activations_from_items()
+	if player_state.micro_cooldown_item_activation > 0 then
+		return false
+	end
+
+	for index, target in ipairs(stage.enemies) do
+		if target.hp <= 0 then
+			goto continue
+		end
+
+		-- From rings
+		for i = 1, 10, 1 do
+			local ring_index = player_state.rings[i]
+			if process_item_skills(ring_index, target) then
+				return true
+			end
+		end
+
+		::continue::
+	end
+
+	return false
 end
 
 ---comment
@@ -1572,6 +1662,14 @@ function love.update(dt)
 
 	player_model.state = ActorModelStateEnum.Idle
 
+	player_state.micro_cooldown_item_activation = player_state.micro_cooldown_item_activation - dt
+
+	if #player_state.items_queue == 0 then
+		while schedule_skill_activations_from_items () do end
+	end
+
+	player_state.micro_cooldown_item_activation = math.max (0, player_state.micro_cooldown_item_activation)
+
 	local action = player_state.current_action
 	if action.kind == ActionEnum.Nothing then
 		-- Can we do a basic attack?
@@ -1580,55 +1678,12 @@ function love.update(dt)
 			if value.hp <= 0 then
 				goto continue
 			end
-
 			-- check all available skills
-
 			-- Inherent:
-
 			if value.position < player_model.position + skills[SkillEnum.MeleeAttack].activation_range(player_state, basic_hero) then
 				switch_action(player_state, ActionEnum.ActivateSkill, SkillEnum.MeleeAttack, INVALID_ITEM_INDEX)
 				action_chosen = true
 				break
-			end
-
-			-- From rings
-
-			for i = 1, 10, 1 do
-				local ring_index = player_state.rings[i]
-				local ring = RETRIEVE_ITEM(ring_index)
-				if ring then
-					for _, affix in ipairs(ring.prefixes) do
-						local skill = PrefixTable[affix].allows_skill
-						if
-							skill
-							and value.position < player_model.position + skills[skill].activation_range(player_state, basic_hero)
-							and ring.cooldown == 0
-						then
-							switch_action(player_state, ActionEnum.ActivateItem, nil, ring_index)
-							action_chosen = true
-							break
-						end
-					end
-					if action_chosen then
-						break
-					end
-					for _, affix in ipairs(ring.suffixes) do
-						local skill = SuffixTable[affix].allows_skill
-						if
-							skill
-							and value.position < player_model.position + skills[skill].activation_range(player_state, basic_hero)
-							and ring.cooldown == 0
-						then
-							switch_action(player_state, ActionEnum.ActivateItem, nil, ring_index)
-							action_chosen = true
-							break
-						end
-
-					end
-					if action_chosen then
-						break
-					end
-				end
 			end
 
 			if action_chosen then
@@ -1653,32 +1708,27 @@ function love.update(dt)
 		local skill_index = action.used_skill
 		assert(skill_index ~= nil)
 		local skill = skills[skill_index]
-		skill.update(vfx_manager, stage, player_state, dt, player_model, basic_hero, false)
+		skill.update(vfx_manager, stage, player_state, dt, player_model, basic_hero, false, 1)
 		if player_state.current_action.completed then
 			reset_action(player_state)
 		end
-	elseif player_state.current_action.kind ==ActionEnum.ActivateItem then
-		local item_index = action.used_item
+	end
+
+	for index, value in ipairs(player_state.items_queue) do
+		local item_index = value.used_item
 		local item = RETRIEVE_ITEM(item_index)
 		assert(item)
 		item.durability = item.durability - 0.01
 		item.cooldown = ITEM_BASE_COOLDOWN
-		for index, value in ipairs(item.prefixes) do
-			local skill_index = PrefixTable[value].allows_skill
+		for index, value in ipairs(item.affixes) do
+			local skill_index = AffixTable[value.affix_index].allows_skill
 			if skill_index then
 				local skill = skills[skill_index]
-				skill.update(vfx_manager, stage, player_state, dt, player_model, basic_hero, true)
+				skill.update(vfx_manager, stage, player_state, dt, player_model, basic_hero, true, value.amount)
 			end
 		end
-		for index, value in ipairs(item.suffixes) do
-			local skill_index = SuffixTable[value].allows_skill
-			if skill_index then
-				local skill = skills[skill_index]
-				skill.update(vfx_manager, stage, player_state, dt, player_model, basic_hero, true)
-			end
-		end
-		reset_action(player_state)
 	end
+	player_state.items_queue = {}
 
 	local decay = math.exp(-dt * 10)
 	hp_view = hp_view * decay + hp * (1 - decay)

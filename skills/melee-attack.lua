@@ -33,7 +33,7 @@ local description = {
 		)
 
 	end,
-	update =function (vfx, stage, player, dt, model, model_description, skip_casting)
+	update =function (vfx, stage, player, dt, model, model_description, skip_casting, magnitude)
 		local attack_range = 10 + model_description.size_x / 2
 		local weapon = RETRIEVE_ITEM(player.weapon)
 		if weapon then

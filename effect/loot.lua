@@ -23,8 +23,7 @@ local function generate_loot(rarity)
 	---@type Item
 	local item = {
 		kind = math.floor(#BaseItemTable *love.math.random()) + 1,
-		suffixes = {},
-		prefixes = {},
+		affixes = {},
 		durability = 1,
 		equipped = false,
 		cooldown = 0,
@@ -38,52 +37,44 @@ local function generate_loot(rarity)
 	for i = 1, rarity do
 		---@type number[]
 		local candidates = {}
-		local is_suffix = love.math.random() > 0.5
 		local total_weight = 0
 
-		if is_suffix then
-			for index, value in ipairs(SuffixTable) do
-				if legit(item, value) then
-					table.insert(candidates, index)
-					total_weight = total_weight + 1 / value.rarity
-				end
-			end
-			local candidates_count = #candidates
-			if candidates_count == 0 then
-				goto continue
-			end
-			local dice = love.math.random() * total_weight
-			local acc = 0
-			for index, value in ipairs(candidates) do
-				local affix = SuffixTable[value]
-				acc = acc + 1 / affix.rarity
-				if acc >= dice then
-					table.insert(item.suffixes, value)
-					goto continue
-				end
-			end
-		else
-			for index, value in ipairs(PrefixTable) do
-				if legit(item, value) then
-					table.insert(candidates, index)
-					total_weight = total_weight + 1 / value.rarity
-				end
-			end
-			local candidates_count = #candidates
-			if candidates_count == 0 then
-				goto continue
-			end
-			local dice = love.math.random() * total_weight
-			local acc = 0
-			for index, value in ipairs(candidates) do
-				local affix = PrefixTable[value]
-				acc = acc + 1 / affix.rarity
-				if acc >= dice then
-					table.insert(item.prefixes, value)
-					goto continue
-				end
+		for index, value in ipairs(AffixTable) do
+			if legit(item, value) then
+				table.insert(candidates, index)
+				total_weight = total_weight + 1 / value.rarity
 			end
 		end
+		local candidates_count = #candidates
+		if candidates_count == 0 then
+			goto continue
+		end
+		local dice = love.math.random() * total_weight
+		local acc = 0
+		for index, value in ipairs(candidates) do
+			local affix = AffixTable[value]
+			acc = acc + 1 / affix.rarity
+			if acc >= dice then
+				local found = false
+				-- check if it is already there :
+				for _, aff in ipairs(item.affixes) do
+					if aff.affix_index == value then
+						aff.amount = aff.amount + 1
+						found = true
+					end
+				end
+				if not found then
+					---@type AffixInstance
+					local to_add = {
+						affix_index = value,
+						amount = 1
+					}
+					table.insert(item.affixes, to_add)
+				end
+				goto continue
+			end
+		end
+
 		::continue::
 	end
 
