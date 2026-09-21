@@ -1,6 +1,6 @@
 -- local basic_attack = require "skills.melee-attack"
 -- local comet = require "skills.comet"
-local aoe = require "effect.aoe-flat"
+local magic_aoe = require "effect.execute-magic-aoe"
 
 local skills = require "skills._manager"
 
@@ -14,6 +14,10 @@ MICROCOOLDOWN = 1 / 60
 ---@field mouse_button number
 ---@field presses number
 
+---@param x number
+function MASTERY_TO_SKILL (x)
+	return (1 - math.pow(2, -x)) * x / (1 + x)
+end
 
 function CLAMP(x, a, b)
 	if (x < a) then
@@ -207,6 +211,14 @@ function  RETRIEVE_ITEM(index)
 	return ITEM_DB.data_array[index.id]
 end
 
+---@class (exact) MasteryState
+---@field melee_weapon number
+---@field melee_defense number
+---@field general_magic number
+
+---@class (exact) MentalState
+---@field learning_speed number
+
 ---@class (exact) PlayerState
 ---@field attack_range number
 ---@field melee_damage number
@@ -216,14 +228,13 @@ end
 ---@field weapon ItemIndex
 ---@field boots ItemIndex
 ---@field mastery MasteryState
+---@field mental MentalState
 ---@field current_action Action
 ---@field items_queue Action[]
 ---@field micro_cooldown_item_activation number
 ---@field item_skills_queue number[]
 
----@class (exact) MasteryState
----@field melee_weapon number
----@field general_magic number
+
 
 
 ---@type PlayerState
@@ -246,7 +257,11 @@ local player_state = {
 	},
 	mastery = {
 		melee_weapon = 0,
-		general_magic = 0
+		melee_defense = 0,
+		general_magic = 0,
+	},
+	mental = {
+		learning_speed = 0.01
 	},
 	current_action = {
 		kind = ActionEnum.Nothing,
@@ -297,6 +312,9 @@ local magic_dust = 0
 ---@field being_hit_animation_progress number
 ---@field on_kill_triggered boolean
 ---@field death_progress number
+---@field difficulty_melee number
+---@field difficulty_spell number
+---@field skill number
 
 ---@class (exact) ProjectileDescription
 ---@field size_x number
@@ -1162,11 +1180,33 @@ local function display_stats(req, x, y)
 	panel(req.render, x, y, interface_grid * 34, interface_grid * 21 )
 	if req.render then
 		style.dense_information_font()
-		love.graphics.print("Max HP: " .. tostring(max_hp), x + 10, y + 10)
-		love.graphics.print("Shield: " .. tostring(shield), x + 10, y + 30)
-		love.graphics.print("Speed: " .. tostring(speed), x + 10, y + 50)
-		love.graphics.print("Melee damage: " .. tostring(player_state.melee_damage), x + 10, y + 70)
-		love.graphics.print("Spell damage: " .. tostring(player_state.spell_damage), x + 10, y + 90)
+		love.graphics.print("Max HP: " .. tostring(max_hp), x + interface_grid, y + interface_grid)
+		love.graphics.print("Shield: " .. tostring(shield), x + interface_grid, y + interface_grid * 3)
+		love.graphics.print("Speed: " .. tostring(speed), x + interface_grid, y + interface_grid * 5)
+		love.graphics.print("Melee damage: " .. tostring(player_state.melee_damage), x + interface_grid, y + interface_grid * 7)
+		love.graphics.print("Spell damage: " .. tostring(player_state.spell_damage), x + interface_grid, y + interface_grid * 9)
+	end
+end
+
+local function progress_bar_detailed(x, y, name, value_bar, value_true)
+	love.graphics.print(name, x, y)
+	progress_bar(x + interface_grid * 10, y, interface_grid * 15, interface_grid * 2, value_bar, value_bar, 1, 0, "yellow")
+	love.graphics.printf(value_true, x + interface_grid * 25, y, interface_grid * 7, "right"  )
+end
+
+
+
+---comment
+---@param req InterfaceRequest
+---@param x number
+---@param y number
+local function display_skill(req, x, y)
+	panel(req.render, x, y, interface_grid * 34, interface_grid * 21 )
+	if req.render then
+		style.dense_information_font()
+		progress_bar_detailed(x + interface_grid, y + interface_grid, "Melee", MASTERY_TO_SKILL(player_state.mastery.melee_weapon), string.format("%.2f%%", MASTERY_TO_SKILL(player_state.mastery.melee_weapon) * 100) )
+		progress_bar_detailed(x + interface_grid, y + interface_grid * 3, "Melee Def.", MASTERY_TO_SKILL(player_state.mastery.melee_defense), string.format("%.2f%%", MASTERY_TO_SKILL(player_state.mastery.melee_defense) * 100) )
+		progress_bar_detailed(x + interface_grid, y + interface_grid * 5, "Magic", MASTERY_TO_SKILL(player_state.mastery.general_magic), string.format("%.2f%%", MASTERY_TO_SKILL(player_state.mastery.general_magic) * 100) )
 	end
 end
 
@@ -1263,7 +1303,7 @@ local function information_window(req, x, y)
 	local selected = RETRIEVE_ITEM(selected_item)
 	if selected then
 		current_tab = StatusTab.Item
-	else
+	elseif current_tab == StatusTab.Item then
 		current_tab = StatusTab.Overview
 	end
 
@@ -1272,7 +1312,7 @@ local function information_window(req, x, y)
 	elseif current_tab == StatusTab.Overview then
 		display_stats(req, x, y + tabs_height)
 	elseif current_tab == StatusTab.Skills then
-
+		display_skill(req, x, y + tabs_height)
 	elseif current_tab == StatusTab.Guilds then
 
 	end
@@ -1383,13 +1423,16 @@ local function generate_enemies()
 			max_hp = 3 + difficulty,
 			model = big_rat,
 			position = math.sqrt(love.math.random() + 0.15) * stage.distance,
-			damage = difficulty,
+			damage = 2,
 			attack_progress = 0,
 			is_attacking = false,
 			being_hit = false,
 			being_hit_animation_progress = 0,
 			on_kill_triggered = false,
-			death_progress = 0
+			death_progress = 0,
+			difficulty_melee = 0.05,
+			difficulty_spell = 0.01,
+			skill = 0.05
 		}
 		table.insert(stage.enemies, starting_enemy)
 	end
@@ -1637,7 +1680,7 @@ function love.update(dt)
 				-- do something
 				value.impact_progress = 1
 				value.discard = true
-				aoe(vfx_manager, stage, value.position - value.desc.size_x / 2 * value.size, value.position + value.desc.size_x / 2 * value.size, value.damage)
+				magic_aoe(vfx_manager, stage, value.position - value.desc.size_x / 2 * value.size, value.position + value.desc.size_x / 2 * value.size, value.damage, player_state)
 			end
 		else
 			local dx = value.target - value.position
@@ -1666,6 +1709,13 @@ function love.update(dt)
 			value.attack_progress = value.attack_progress + dt
 			if value.attack_progress >= 1 then
 				local enemy_damage = value.damage
+				local skill_diff = value.skill - player_state.mastery.melee_defense
+				local success = love.math.random() < skill_diff / 0.5 + 0.5
+				if not success then
+					enemy_damage =math.floor(enemy_damage / 10)
+				else
+					player_state.mastery.melee_defense = player_state.mastery.melee_defense + player_state.mental.learning_speed
+				end
 				if enemy_damage >= shield then
 					enemy_damage = enemy_damage - shield
 					shield = 0

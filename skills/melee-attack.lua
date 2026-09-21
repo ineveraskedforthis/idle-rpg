@@ -1,4 +1,4 @@
-local flat_aoe = require "effect.aoe-flat"
+local flat_aoe = require "effect.execute-melee-aoe"
 
 local hit_image = love.graphics.newImage("hit.png")
 local hit_quads = {}
@@ -44,7 +44,7 @@ local description = {
 		local data = player.current_action
 		data.progress = data.progress + dt
 		if data.progress >= 1 then
-			flat_aoe(vfx, stage, model.position - model_description.size_x / 2 *model_description.image_base_scale, model.position + attack_range, player.melee_damage)
+			flat_aoe(vfx, stage, model.position - model_description.size_x / 2 *model_description.image_base_scale, model.position + attack_range, player.melee_damage, player)
 			if (weapon) then
 				local old_durability = weapon.durability
 				local next_durability = old_durability - 0.01
