@@ -1,6 +1,5 @@
 ---@param player PlayerState
----@param difficulty number
-return function (player, difficulty)
-	require "effect.loot"(player, difficulty)
-	-- player.exp = player.exp + difficulty
+---@param enemy EnemyPrototype
+return function (player, enemy)
+	require "effect.loot"(player, enemy)
 end

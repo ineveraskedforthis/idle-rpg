@@ -9,14 +9,14 @@ end
 
 ---@type SkillDefinition
 local description = {
-	activation_range =function (player, player_model)
+	activation_range =function (player)
 		local attack_range = 10
 		local weapon = RETRIEVE_ITEM(player.weapon)
 		if weapon then
 			local b = BaseItemTable[weapon.kind]
 			attack_range = b.range
 		end
-		return attack_range / 2 + player_model.size_x / 2 * player_model.image_base_scale
+		return attack_range / 2 + player.model_description.size_x / 2 * player.model_description.image_base_scale
 	end,
 	draw = function (x, y, data, actor_model, actor_position, camera_shift)
 		local frame = math.floor(data.current_action.progress * 4) % 4

@@ -12,7 +12,7 @@ local blood_ground_image = love.graphics.newImage("blood-ground.png")
 return function (vfx, stage, left_x, right_x, damage_value, attacker)
 	for index, value in ipairs(stage.enemies) do
 		if value.position >= left_x and value.position <= right_x and value.hp > 0 then
-			local difficulty = value.difficulty_melee
+			local difficulty = value.prototype.melee_defense
 			local skill = MASTERY_TO_SKILL(attacker.mastery.melee_weapon)
 
 			local skill_diff = skill - difficulty

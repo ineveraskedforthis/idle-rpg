@@ -21,7 +21,7 @@ local comet_projectile_desc = {
 
 ---@type SkillDefinition
 local def = {
-	activation_range =function (player, model)
+	activation_range =function (player)
 		return 600
 	end,
 	draw = function (x, y, data, actor_model, actor_position, camera_shift)
