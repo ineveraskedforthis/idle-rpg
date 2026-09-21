@@ -91,7 +91,7 @@ return {
 		love.graphics.setFont(header_font)
 	end,
 
-	item_name_font = function ()
+	dense_information_font = function ()
 		love.graphics.setFont(item_name_font)
 	end,
 

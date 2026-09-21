@@ -1161,6 +1161,7 @@ local current_tab = StatusTab.Overview
 local function display_stats(req, x, y)
 	panel(req.render, x, y, interface_grid * 34, interface_grid * 21 )
 	if req.render then
+		style.dense_information_font()
 		love.graphics.print("Max HP: " .. tostring(max_hp), x + 10, y + 10)
 		love.graphics.print("Shield: " .. tostring(shield), x + 10, y + 30)
 		love.graphics.print("Speed: " .. tostring(speed), x + 10, y + 50)
@@ -1208,7 +1209,7 @@ local function display_item_description(req, x, y)
 			end
 		end
 
-		style.item_name_font()
+		style.dense_information_font()
 		love.graphics.printf(name, x + interface_grid, y + interface_grid * 14, interface_grid * 32, "center")
 
 		love.graphics.print("Shield: ", x + interface_grid, y + interface_grid * 8)
@@ -1397,15 +1398,6 @@ end
 function love.load()
 	love.window.setTitle("Endless Ledge")
 	generate_enemies()
-
-	require "effect.loot"(player_state, 100)
-	require "effect.loot"(player_state, 100)
-	require "effect.loot"(player_state, 100)
-	require "effect.loot"(player_state, 100)
-	require "effect.loot"(player_state, 100)
-	require "effect.loot"(player_state, 100)
-	require "effect.loot"(player_state, 100)
-	require "effect.loot"(player_state, 100)
 end
 
 local reset_stage = true
