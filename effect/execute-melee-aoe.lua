@@ -34,8 +34,9 @@ return function (vfx, stage, left_x, right_x, damage_value, attacker)
 			local success = love.math.random() < success_probability
 
 			local actual_damage = damage_value
-			if not success then
-				actual_damage = math.floor(damage_value * 0.1)
+			if success then
+				actual_damage = damage_value * 10
+			else
 				attacker.mastery.melee_weapon = attacker.mastery.melee_weapon + attacker.mental.learning_speed
 			end
 
@@ -52,7 +53,11 @@ return function (vfx, stage, left_x, right_x, damage_value, attacker)
 				stage.distance,
 				value.model.position + attacker.model_description.size_x * attacker.model_description.image_base_scale / 2 * orientation
 			)
-			insert_particle(vfx, value.model.position + 0.1 * (love.math.random() - 0.5), 1 + love.math.random(), blood_ground_image, 4)
+			if success then
+				insert_particle(vfx, value.model.position + 0.1 * (love.math.random() - 0.5), 1 + love.math.random(), blood_ground_image, 4)
+			else
+				insert_particle(vfx, value.model.position + 0.1 * (love.math.random() - 0.5), 0.75, blood_ground_image, 4)
+			end
 			insert_particle(vfx, value.model.position + 0.1 * (love.math.random() - 0.5), 0.25 + love.math.random(), blood_hit_image, 0.25)
 		end
 	end

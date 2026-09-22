@@ -27,8 +27,9 @@ return function (vfx, stage, left_x, right_x, damage_value, attacker)
 			local success = love.math.random() < success_probability
 
 			local actual_damage = damage_value
-			if not success then
-				actual_damage = math.floor(damage_value * 0.1)
+			if success then
+				actual_damage = damage_value * 10
+			else
 				attacker.mastery.general_magic = attacker.mastery.general_magic + attacker.mental.learning_speed
 			end
 
