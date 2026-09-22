@@ -1,6 +1,6 @@
 local flat_aoe = require "effect.execute-melee-aoe"
 
-local hit_image = love.graphics.newImage("hit.png")
+local hit_image = love.graphics.newImage("assets/effects/hit.png")
 local hit_quads = {}
 for i = 0, 3 do
 	local quad = love.graphics.newQuad(i * 40, 0, 40, 40, hit_image:getDimensions())

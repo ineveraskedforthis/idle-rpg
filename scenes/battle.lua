@@ -25,14 +25,12 @@ for i = 0, 4 do
 	table.insert(portal_quads, quad)
 end
 
-local hit_image = love.graphics.newImage("hit.png")
+local hit_image = love.graphics.newImage("assets/effects/hit.png")
 local hit_quads = {}
 for i = 0, 3 do
 	local quad = love.graphics.newQuad(i * 40, 0, 40, 40, hit_image:getDimensions())
 	table.insert(hit_quads, quad)
 end
-
-local blood_hit_image = love.graphics.newImage("blood-hit.png")
 
 ---comment
 ---@param render boolean

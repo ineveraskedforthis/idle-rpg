@@ -29,8 +29,8 @@ local scene = SceneEnum.MainMenu
 
 local blob = love.graphics.newImage("blob.png")
 local blob_x, blob_y = blob:getDimensions()
-local inventory_slot_bg = love.graphics.newImage("inventory_slot.png")
-local blood_ground_image = love.graphics.newImage("blood-ground.png")
+local inventory_slot_bg = love.graphics.newImage("assets/ui/inventory-slot-bg.png")
+local blood_ground_image = love.graphics.newImage("assets/effects/blood-ground.png")
 
 ---@type VFX
 local vfx_manager = {
@@ -215,7 +215,7 @@ Locations[1] = {
 	x = 155,
 	y = 187,
 	display_radius = 3,
-	background = love.graphics.newImage("bg-1200-500.png"),
+	background = love.graphics.newImage("assets/bg/ledge.png"),
 	controlled_by = 1,
 	basic_armies = 10,
 	elite_armies = 0
@@ -225,7 +225,7 @@ Locations[2] = {
 	x = 176,
 	y = 202,
 	display_radius = 3,
-	background = love.graphics.newImage("bg-1200-500.png"),
+	background = love.graphics.newImage("assets/bg/ledge.png"),
 	controlled_by = 1,
 	basic_armies = 10,
 	elite_armies = 0
@@ -337,7 +337,7 @@ local equip_image_height = 41 * INTERFACE_GRID
 local stats_height = 29 * INTERFACE_GRID
 local inventory_height = 23 * INTERFACE_GRID
 
-local equip_bg = love.graphics.newImage("equip.png")
+local equip_bg = love.graphics.newImage("assets/ui/equip.png")
 
 local ring_xy = {
 	{1, 25},
@@ -764,7 +764,7 @@ local function right_side_panel(req)
 	end
 end
 
-local map_image = love.graphics.newImage("map.png")
+local map_image = love.graphics.newImage("assets/bg/map.png")
 local map_view_quad = love.graphics.newQuad(0, 0, INTERFACE_GRID * 88, INTERFACE_GRID * 71, map_image)
 local map_view_origin_x = 0
 local map_view_origin_y = 0

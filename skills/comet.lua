@@ -1,6 +1,6 @@
 local description = {}
 
-local comet_image = love.graphics.newImage("comet.png")
+local comet_image = love.graphics.newImage("assets/effects/comet.png")
 local comet_x = 96
 local comet_y = 96
 

@@ -1,7 +1,7 @@
 local insert_particle = require "effect-visual.particle"
 
-local blood_hit_image = love.graphics.newImage("blood-hit.png")
-local blood_ground_image = love.graphics.newImage("blood-ground.png")
+local blood_hit_image = love.graphics.newImage("assets/effects/blood-hit.png")
+local blood_ground_image = love.graphics.newImage("assets/effects/blood-ground.png")
 
 ---@param vfx VFX
 ---@param stage Stage
