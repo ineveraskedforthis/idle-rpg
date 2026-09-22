@@ -27,11 +27,13 @@
 
 ---@class (exact) EnemyPrototype
 ---@field hp_max number
----@field attack_skill number
+---@field attack_experience number
+---@field spell_experience number
 ---@field base_damage number
 ---@field melee_defense number
 ---@field spell_defense number
 ---@field model_description ActorModelDescription
+---@field speed number
 
 ---@class (exact) ArmyComposition
 ---@field unit EnemyPrototype
@@ -41,6 +43,11 @@
 ---@field name string
 ---@field basic_composition ArmyComposition[]
 ---@field elite_composition ArmyComposition[]
+
+---@class (exact) FactionState
+---@field fear number
+---@field respect number
+---@field relations number
 
 ---@class (exact) Location
 ---@field name string
@@ -65,8 +72,7 @@
 ---@class (exact) MentalState
 ---@field learning_speed number
 
----@class (exact) PlayerState
----@field attack_range number
+---@class (exact) ActorState
 ---@field melee_damage number
 ---@field spell_damage number
 ---@field stash ItemIndex[]
@@ -88,7 +94,10 @@
 ---@field hp_max number
 ---@field shield number
 ---@field speed number
+---@field on_kill_triggered boolean
+---@field is_enemy boolean
 
+--[[
 ---@class (exact) Enemy
 ---@field hp number
 ---@field view_hp number
@@ -100,6 +109,7 @@
 ---@field being_hit_animation_progress number
 ---@field on_kill_triggered boolean
 ---@field death_progress number
+--]]
 
 ---@class (exact) ProjectileDescription
 ---@field size_x number
@@ -122,7 +132,8 @@
 
 ---@class (exact) Stage
 ---@field distance number
----@field enemies Enemy[]
+---@field enemies ActorState[]
+---@field allies ActorState[]
 ---@field projectiles Projectile[]
 ---@field is_elite boolean
 
@@ -187,6 +198,8 @@
 ---@field state ActorModelStateEnum
 ---@field walk_timer number
 ---@field death_timer number
+---@field being_hit_timer number
+---@field orientation number
 
 
 ---@enum MouseButton
@@ -211,7 +224,8 @@ ActorModelStateEnum = {
 	Idle = 1,
 	Walking = 2,
 	Attacking = 3,
-	Dead = 4
+	Dead = 4,
+	Attacked = 5,
 }
 
 

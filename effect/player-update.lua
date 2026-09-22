@@ -1,6 +1,6 @@
 local values = require "values.common"
 
----@param player PlayerState
+---@param player ActorState
 return function(player)
 	player.melee_damage = 1 + values.get_melee_damage(player.weapon)
 	player.spell_damage = 1 + values.get_magic_damage(player.boots) + values.get_magic_damage(player.weapon)

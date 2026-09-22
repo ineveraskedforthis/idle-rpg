@@ -179,14 +179,45 @@ local large_rat = {
 		idle_frames = {love.graphics.newQuad(300, 0, 300, 300, big_rat_image)},
 		attack_frames = {love.graphics.newQuad(0, 300, 300, 300, big_rat_image)},
 		dead_frame = {love.graphics.newQuad(300, 300, 300, 300, big_rat_image)},
+		walk_timer_mult = 1 / 100,
+		attack_timer_mult = 1 / 100,
+	},
+	base_damage = 1,
+	attack_experience = 0.1,
+	speed = 200,
+	spell_experience = 0
+}
+
+local baron_rat_image = love.graphics.newImage("assets/rat-baron/base.png")
+local baron_rat_image_x, baron_rat_image_y = baron_rat_image:getDimensions()
+---@type EnemyPrototype
+local rat_baron = {
+	attack_skill = 0.1,
+	hp_max = 50,
+	melee_defense = 0.2,
+	spell_defense = 0.1,
+	model_description = {
+		size_x = baron_rat_image_x,
+		size_y = baron_rat_image_y,
+		image = baron_rat_image,
+		image_base_scale = 0.5,
+		walk_frames = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
+		idle_frames = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
+		attack_frames = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
+		dead_frame = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
 		walk_timer_mult = 1,
 		attack_timer_mult = 1,
 	},
-	base_damage = 1
+	base_damage = 1,
+	attack_experience = 1,
+	spell_experience = 1,
+	speed = 100
 }
 
 ---@type Faction[]
 Factions = {}
+---@type FactionState[]
+FactionsState  ={}
 
 Factions[1] = {
 	name = "Duchy of Ledgeroad",
@@ -198,7 +229,7 @@ Factions[1] = {
 	},
 	elite_composition = {
 		{
-			unit = large_rat,
+			unit = rat_baron,
 			weight = 1
 		}
 	}
@@ -218,7 +249,7 @@ Locations[1] = {
 	background = love.graphics.newImage("assets/bg/ledge.png"),
 	controlled_by = 1,
 	basic_armies = 10,
-	elite_armies = 0
+	elite_armies = 1
 }
 Locations[2] = {
 	name = "Rat Hills",
@@ -270,7 +301,7 @@ local basic_hero = {
 }
 
 
----@type PlayerState
+---@type ActorState
 local player_state = {
 	attack_range = 0,
 	stash = {},
@@ -315,18 +346,24 @@ local player_state = {
 		walk_timer = 0,
 		state = ActorModelStateEnum.Idle,
 		death_timer = 0,
+		being_hit_timer = 0,
+		orientation = 1
 	},
 	hp = 0,
 	hp_max = 15,
 	hp_view = 0,
 	shield = 0,
 	speed = 1,
+	death_progress = 0,
+	on_kill_triggered = false,
+	is_enemy = false
 }
 
 ---@type Stage
 local stage = {
 	distance = 1000,
 	enemies = {},
+	allies = {},
 	projectiles = {},
 	is_elite = false,
 }
@@ -855,7 +892,11 @@ local function map_control(req, x, y)
 	else
 		-- panel(req.render, x + INTERFACE_GRID * (25 + 1), y + INTERFACE_GRID, INTERFACE_GRID * 20, INTERFACE_GRID * 21)
 		if button(req.render, "Clean up the location", x + INTERFACE_GRID * (25 + 1), y + INTERFACE_GRID, INTERFACE_GRID * 20, INTERFACE_GRID * 21, req.mx, req.my) then
-			battle_scene.generate_enemies(stage, player_state.location)
+			if cur_data.basic_armies > 0 then
+				battle_scene.generate_enemies(player_state, stage, player_state.location, false)
+			else
+				battle_scene.generate_enemies(player_state, stage, player_state.location, true)
+			end
 			player_state.model.position = 0
 			start_transition(SceneEnum.Battle)
 		end
@@ -915,6 +956,13 @@ function love.load()
 			elite_armies = value.elite_armies
 		}
 		value.background:setWrap("repeat")
+	end
+	for index, value in ipairs(Factions) do
+		FactionsState[index] = {
+			fear = 0,
+			relations = 0,
+			respect = 0
+		}
 	end
 
 	RESET_ITEMS()
@@ -984,7 +1032,7 @@ function love.update(dt)
 	local decay = math.exp(-dt * 10)
 	player_state.hp_view = player_state.hp_view * decay + player_state.hp * (1 - decay)
 	for index, value in ipairs(stage.enemies) do
-		value.view_hp = value.view_hp * decay + value.hp * (1 - decay)
+		value.hp_view = value.hp_view * decay + value.hp * (1 - decay)
 	end
 	for index, value in ipairs(ITEM_DB.data_array) do
 		value.cooldown = math.max(value.cooldown - dt, 0)

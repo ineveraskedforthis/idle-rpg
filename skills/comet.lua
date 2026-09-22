@@ -42,7 +42,7 @@ local def = {
 				if value.hp <= 0 then
 					goto continue
 				end
-				local dist = value.position - model.position
+				local dist = value.model.position - model.position
 				if dist < closest_target_dist then
 					closest_target_dist = dist
 					target = index
@@ -58,7 +58,7 @@ local def = {
 						position = model.position + (math.random() - 0.5) * 50,
 						size = 4,
 						speed = 1000,
-						target = stage.enemies[target].position + (math.random() - 0.5) * 200,
+						target = stage.enemies[target].model.position + (math.random() - 0.5) * 200,
 						discard = false,
 						impact = false,
 						impact_progress = 0,

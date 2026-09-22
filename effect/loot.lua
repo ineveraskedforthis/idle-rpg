@@ -81,8 +81,8 @@ local function generate_loot(rarity)
 	return item_index
 end
 
----@param state PlayerState
----@param enemy EnemyPrototype
+---@param state ActorState
+---@param enemy ActorState
 local function loot_enemy(state, enemy)
 	local inventory = 0
 	for index, value in ipairs(state.stash) do
@@ -92,7 +92,7 @@ local function loot_enemy(state, enemy)
 		end
 	end
 	if love.math.random() < 0.33 and inventory < 15 then
-		local item = generate_loot(love.math.random() * (1 + 10 * (enemy.attack_skill + enemy.spell_defense + enemy.melee_defense) + enemy.base_damage / 2))
+		local item = generate_loot(love.math.random() * (1 + 10 * MASTERY_TO_SKILL (enemy.mastery.general_magic + enemy.mastery.melee_weapon + enemy.mastery.melee_defense) + enemy.melee_damage / 2 + enemy.spell_damage / 2))
 		table.insert(state.stash, item)
 		return item
 	end

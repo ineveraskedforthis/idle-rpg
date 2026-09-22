@@ -3,16 +3,28 @@ local insert_particle = require "effect-visual.particle"
 local blood_hit_image = love.graphics.newImage("assets/effects/blood-hit.png")
 local blood_ground_image = love.graphics.newImage("assets/effects/blood-ground.png")
 
+
+
 ---@param vfx VFX
 ---@param stage Stage
 ---@param left_x number
 ---@param right_x number
 ---@param damage_value number
----@param attacker PlayerState
+---@param attacker ActorState
 return function (vfx, stage, left_x, right_x, damage_value, attacker)
-	for index, value in ipairs(stage.enemies) do
-		if value.position >= left_x and value.position <= right_x and value.hp > 0 then
-			local difficulty = value.prototype.melee_defense
+	local orientation = 1
+	if right_x < left_x then
+		orientation = -1
+	end
+	local targets = stage.enemies
+	if attacker.is_enemy then
+		targets = stage.allies
+	end
+	for index, value in ipairs(targets) do
+		local model_left = value.model.position - value.model_description.size_x  * value.model_description.image_base_scale / 2
+		local model_right = value.model.position + value.model_description.size_x * value.model_description.image_base_scale / 2
+		if RANGES_INTERSECT(model_left, model_right, left_x, right_x) and value.hp > 0 then
+			local difficulty = value.mastery.melee_defense
 			local skill = MASTERY_TO_SKILL(attacker.mastery.melee_weapon)
 
 			local skill_diff = skill - difficulty
@@ -28,11 +40,20 @@ return function (vfx, stage, left_x, right_x, damage_value, attacker)
 			end
 
 			value.hp = value.hp - actual_damage
-			value.being_hit = true
-			value.being_hit_animation_progress = 0
-			value.position = math.min(stage.distance, value.position + 5)
-			insert_particle(vfx, value.position + 0.1 * (love.math.random() - 0.5), 1 + love.math.random(), blood_ground_image, 4)
-			insert_particle(vfx, value.position + 0.1 * (love.math.random() - 0.5), 0.25 + love.math.random(), blood_hit_image, 0.25)
+
+			value.current_action.progress = 0
+			value.current_action.kind =ActionEnum.Nothing
+			value.current_action.used_skill = nil
+			value.current_action.completed = true
+
+			-- value.being_hit = true
+			-- value.being_hit_animation_progress = 0
+			value.model.position = math.min(
+				stage.distance,
+				value.model.position + attacker.model_description.size_x * attacker.model_description.image_base_scale / 2 * orientation
+			)
+			insert_particle(vfx, value.model.position + 0.1 * (love.math.random() - 0.5), 1 + love.math.random(), blood_ground_image, 4)
+			insert_particle(vfx, value.model.position + 0.1 * (love.math.random() - 0.5), 0.25 + love.math.random(), blood_hit_image, 0.25)
 		end
 	end
 end

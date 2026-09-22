@@ -1,9 +1,8 @@
 local update = require "effect.player-update"
 
----@param player PlayerState
+---@param player ActorState
 ---@param model_description ActorModelDescription
 return function (player, model_description)
-	player.attack_range = 0
 	player.stash = {}
 	player.melee_damage = 0
 	player.spell_damage = 0
@@ -46,6 +45,8 @@ return function (player, model_description)
 		walk_timer = 0,
 		state = ActorModelStateEnum.Idle,
 		death_timer = 0,
+		orientation = 1,
+		being_hit_timer = 0
 	}
 	player.hp = BASE_MAX_HP
 	player.hp_max = BASE_MAX_HP
