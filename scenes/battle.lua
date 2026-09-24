@@ -350,7 +350,7 @@ function battle_scene.generate_enemies(player, stage, location_index, elite)
 	local faction = Factions[loc_data.controlled_by]
 
 	local composition = faction.basic_composition
-	local count = 5
+	local count = loc_desc.pack_size
 
 	if elite then
 		composition = faction.elite_composition

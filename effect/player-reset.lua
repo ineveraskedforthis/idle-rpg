@@ -58,6 +58,7 @@ return function (player, model_description)
 	player.speed = 1
 
 	player.location = StartingLocation
+	player.location_last = player.location
 
 	update(player)
 end

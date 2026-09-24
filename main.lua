@@ -997,7 +997,7 @@ local function map_control(req, x, y)
 	local can_move_description = "I can move freely from this location."
 	if cur_data.basic_armies > 0 or cur_data.elite_armies > 0 then
 		can_move = false
-		can_move_description = string.format("%d waves of hostile creatures block my way.", cur_data.basic_armies + cur_data.elite_armies)
+		can_move_description = string.format("%d waves (size: %d) of hostile creatures block my way. Also, there are %d elite waves. I can retreat or attempt to clean up this location.", cur_data.basic_armies, cur.pack_size, cur_data.elite_armies)
 	end
 	if req.render then
 		local description = string.format("Location: %s.\nControlled by: %s.\n%s", cur.name, controller_name, can_move_description)
@@ -1012,6 +1012,7 @@ local function map_control(req, x, y)
 			local next_destination = Locations[value]
 			if button(req.render, next_destination.name, button_x, button_y, INTERFACE_GRID * 35, INTERFACE_GRID *3, req.mx, req.my) then
 				-- TODO: non-instant movement
+				player_state.location_last = player_state.location
 				player_state.location = value
 			end
 			if rect_detection(button_x, button_y, INTERFACE_GRID * 40, INTERFACE_GRID *3, req.mx, req.my) then
@@ -1021,7 +1022,7 @@ local function map_control(req, x, y)
 		end
 	else
 		-- panel(req.render, x + INTERFACE_GRID * (25 + 1), y + INTERFACE_GRID, INTERFACE_GRID * 20, INTERFACE_GRID * 21)
-		if button(req.render, "Clean up the location", x + INTERFACE_GRID * (25 + 1), y + INTERFACE_GRID, INTERFACE_GRID * 35, INTERFACE_GRID * 21, req.mx, req.my) then
+		if button(req.render, "Clean up the location", x + INTERFACE_GRID * (25 + 1), y + INTERFACE_GRID, INTERFACE_GRID * 35, INTERFACE_GRID * 18, req.mx, req.my) then
 			if cur_data.basic_armies > 0 then
 				battle_scene.generate_enemies(player_state, stage, player_state.location, false)
 			else
@@ -1029,6 +1030,10 @@ local function map_control(req, x, y)
 			end
 			player_state.model.position = 0
 			start_transition(SceneEnum.Battle)
+		end
+
+		if player_state.location ~= player_state.location_last and  button(req.render, "Retreat", x + INTERFACE_GRID * (25 + 1), y + INTERFACE_GRID * (1 + 19), INTERFACE_GRID * 35, INTERFACE_GRID * 3, req.mx, req.my) then
+			player_state.location = player_state.location_last
 		end
 	end
 

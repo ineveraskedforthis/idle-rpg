@@ -64,6 +64,7 @@
 ---@field elite_armies number
 ---@field background love.Image
 ---@field local_characters ActorState[]
+---@field pack_size number
 
 ---@class (exact) LocationState
 ---@field controlled_by number
@@ -94,6 +95,7 @@
 ---@field item_skills_queue number[]
 ---@field in_battle boolean
 ---@field location number|nil
+---@field location_last number|nil
 ---@field model_description ActorModelDescription
 ---@field model ActorModelState
 ---@field hp number

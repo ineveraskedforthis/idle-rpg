@@ -118,11 +118,12 @@ function w.load(economy)
 		display_radius = 3,
 		background = love.graphics.newImage("assets/bg/ledge.png"),
 		controlled_by = 1,
-		basic_armies = 2,
+		basic_armies = 6,
 		elite_armies = 0,
 		local_characters = {
 			butcher
-		}
+		},
+		pack_size = 1
 	}
 	Locations[2] = {
 		name = "Rat Hills",
@@ -131,9 +132,10 @@ function w.load(economy)
 		display_radius = 3,
 		background = love.graphics.newImage("assets/bg/ledge.png"),
 		controlled_by = 1,
-		basic_armies = 2,
+		basic_armies = 4,
 		elite_armies = 0,
-		local_characters = {}
+		local_characters = {},
+		pack_size = 2
 	}
 	Locations[3] = {
 		name = "Horn of Indifference",
@@ -142,9 +144,10 @@ function w.load(economy)
 		display_radius = 3,
 		background = love.graphics.newImage("assets/bg/ledge.png"),
 		controlled_by = 1,
-		basic_armies = 2,
+		basic_armies = 4,
 		elite_armies = 0,
-		local_characters = {}
+		local_characters = {},
+		pack_size = 5
 	}
 	Locations[4] = {
 		name = "Fangford",
@@ -155,7 +158,8 @@ function w.load(economy)
 		controlled_by = 1,
 		basic_armies = 2,
 		elite_armies = 0,
-		local_characters = {}
+		local_characters = {},
+		pack_size = 20
 	}
 
 
