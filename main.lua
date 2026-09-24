@@ -918,9 +918,6 @@ local function camp(req, x, y)
 			end
 
 			for output_index, output_item_index in ipairs(r.outputs) do
-				if player_state.inventory[output_item_index.value] >= r.outputs_amount[output_index] then
-					goto continue
-				end
 				if local_crafter.inventory[output_item_index.value] == 0 then
 					goto continue
 				end
