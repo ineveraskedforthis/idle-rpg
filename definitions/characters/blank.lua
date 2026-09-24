@@ -31,6 +31,7 @@ return function ()
 		hp_max = BASE_MAX_HP,
 		hp_view = BASE_MAX_HP,
 		in_battle = false,
+		total_defense = 0,
 		inventory = EMPTY_INVENTORY(),
 		price_belief_buy = EMPTY_INVENTORY(1),
 		price_belief_sell = EMPTY_INVENTORY(1),
@@ -49,6 +50,7 @@ return function ()
 			general_magic = 0,
 			melee_defense = 0,
 			melee_weapon = 0,
+			boneworking = 0
 		},
 		melee_damage = 1,
 		mental = {
@@ -83,7 +85,8 @@ return function ()
 		spell_damage = 0,
 		stash = {},
 		weapon = INVALID_ITEM_INDEX,
-		target_recipes = {}
+		target_recipes = {},
+		body_armor = INVALID_ITEM_INDEX
 	}
 	return res
 end

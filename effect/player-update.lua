@@ -8,4 +8,6 @@ return function(player)
 		player.spell_damage = player.spell_damage + values.get_magic_damage(player.rings[i])
 	end
 	player.speed = 200 * (1 + values.get_speed_mod(player.weapon) + values.get_speed_mod(player.boots))
+
+	player.total_defense = values.get_defense(player.body_armor)
 end

@@ -25,7 +25,7 @@ return function (vfx, stage, left_x, right_x, damage_value, attacker)
 		local model_left = value.model.position - value.model_description.size_x  * value.model_description.image_base_scale / 2
 		local model_right = value.model.position + value.model_description.size_x * value.model_description.image_base_scale / 2
 		if RANGES_INTERSECT(model_left, model_right, left_x, right_x) and value.hp > 0 then
-			local difficulty = value.mastery.melee_defense
+			local difficulty = MASTERY_TO_SKILL(value.mastery.melee_defense)
 			local skill = MASTERY_TO_SKILL(attacker.mastery.melee_weapon)
 
 			local skill_diff = skill - difficulty
@@ -48,6 +48,31 @@ return function (vfx, stage, left_x, right_x, damage_value, attacker)
 				value.mastery.melee_defense = value.mastery.melee_defense + value.mental.learning_speed * 2
 			else
 				attacker.mastery.melee_weapon = attacker.mastery.melee_weapon + attacker.mental.learning_speed
+			end
+
+			local def = value.total_defense * (1 + difficulty)
+
+			local blocked = false
+			if def >= actual_damage then
+				blocked = true
+			else
+				if love.math.random() < def / actual_damage then
+					blocked = true
+				end
+			end
+
+			if blocked then
+				actual_damage = 0
+				local armor = RETRIEVE_ITEM(value.body_armor)
+				if armor then
+					armor.durability = armor.durability - 0.001
+				end
+			end
+
+			if value.shield > actual_damage then
+				actual_damage = 0
+			else
+				actual_damage = actual_damage - value.shield
 			end
 
 			value.hp = value.hp - actual_damage

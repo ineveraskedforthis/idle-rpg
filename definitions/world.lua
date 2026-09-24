@@ -130,6 +130,13 @@ function w.load(economy)
 	butcher.name = "Butcher"
 	table.insert(butcher.target_recipes, economy.buther_rat)
 
+	local craftsman = require "definitions.characters.blank"()
+	craftsman.coins = 10
+	craftsman.name = "Craftsman"
+	table.insert(craftsman.target_recipes, economy.make_rat_armor)
+	craftsman.item_kind_price_belief_sell[economy.rat_armor.value] = 10
+	craftsman.mastery.boneworking = 100
+
 	Locations[1] = {
 		name = "Grimtide",
 		x = 155,
@@ -140,7 +147,7 @@ function w.load(economy)
 		basic_armies = 8,
 		elite_armies = 0,
 		local_characters = {
-			butcher
+			butcher, craftsman
 		},
 		pack_size = 1
 	}

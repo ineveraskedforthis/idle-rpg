@@ -74,6 +74,7 @@
 ---@field melee_defense number
 ---@field general_magic number
 ---@field cooking number
+---@field boneworking number
 
 ---@class (exact) MentalState
 ---@field learning_speed number
@@ -81,10 +82,12 @@
 ---@class (exact) ActorState
 ---@field melee_damage number
 ---@field spell_damage number
+---@field total_defense number
 ---@field stash ItemIndex[]
 ---@field rings ItemIndex[]
 ---@field weapon ItemIndex
 ---@field boots ItemIndex
+---@field body_armor ItemIndex
 ---@field mastery MasteryState
 ---@field mental MentalState
 ---@field current_action Action
@@ -177,6 +180,7 @@
 ---@field speed_modifier number
 ---@field base_attack_speed number
 ---@field shield number
+---@field defense number
 ---@field slot ItemSlot
 ---@field range number
 ---@field image_kind ItemImageSize
@@ -276,10 +280,11 @@ ActorModelStateEnum = {
 
 ---@enum ItemSlot
 ItemSlot = {
-	Boots = 1,
-	Weapon = 2,
-	Ring = 3,
-	None = 4,
+	None = 1,
+	Boots = 2,
+	Weapon = 3,
+	Body = 4,
+	Ring = 5,
 }
 
 ---@enum ItemImageSize

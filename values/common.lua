@@ -69,6 +69,19 @@ end
 
 ---@param item ItemIndex
 ---@return integer
+function t.get_defense(item)
+	---@type number
+	local result = 0
+	local w = RETRIEVE_ITEM(item)
+	if not w then
+		return 0
+	end
+	local b = GET_ITEM_KIND(w.kind)
+	return b.defense
+end
+
+---@param item ItemIndex
+---@return integer
 function t.get_speed_mod(item)
 	---@type number
 	local result = 0

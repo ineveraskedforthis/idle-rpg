@@ -222,6 +222,12 @@ local function unequip_item(item)
 			player_state.weapon = INVALID_ITEM_INDEX
 		end
 	end
+	if slot ==ItemSlot.Body then
+		if player_state.body_armor.id == item.id then
+			data.equipped = false
+			player_state.body_armor = INVALID_ITEM_INDEX
+		end
+	end
 	if slot == ItemSlot.Ring then
 		for i = 1, 10, 1 do
 			if player_state.rings[i].id == item.id then
@@ -257,6 +263,14 @@ local function equip_item(item)
 			current_weapon.equipped = false
 		end
 		player_state.weapon = item
+		data.equipped = true
+	end
+	if slot ==ItemSlot.Body then
+		local cur = RETRIEVE_ITEM(player_state.body_armor)
+		if cur then
+			cur.equipped = false
+		end
+		player_state.body_armor = item
 		data.equipped = true
 	end
 	if slot == ItemSlot.Ring then
@@ -306,14 +320,14 @@ local function draw_item(req, x, y, item, true_size, draw_border, draw_bg)
 			durability_width = INTERFACE_GRID * 2
 			border_height = INTERFACE_GRID * 2
 			border_width = INTERFACE_GRID *2
-		elseif  slot ==ItemSlot.Weapon then
+		elseif  slot ==ItemSlot.Weapon or slot == ItemSlot.Body then
 			size_y = INTERFACE_GRID * 12
 			durability_offset = size_y - 7
 			border_height = INTERFACE_GRID * 12
 		end
 	else
 		if slot == ItemSlot.Boots then
-		elseif slot ==ItemSlot.Weapon then
+		elseif slot ==ItemSlot.Weapon or slot == ItemSlot.Body then
 			size_x = size_x / 2
 			size_y = size_y / 2
 			scale_mult = UI_SCALE / 2
@@ -425,6 +439,8 @@ local function display_skill(req, x, y)
 		progress_bar_detailed(x + INTERFACE_GRID, y + INTERFACE_GRID, "Melee", MASTERY_TO_SKILL(player_state.mastery.melee_weapon), string.format("%.2f%%", MASTERY_TO_SKILL(player_state.mastery.melee_weapon) * 100) )
 		progress_bar_detailed(x + INTERFACE_GRID, y + INTERFACE_GRID * 3, "Melee Def.", MASTERY_TO_SKILL(player_state.mastery.melee_defense), string.format("%.2f%%", MASTERY_TO_SKILL(player_state.mastery.melee_defense) * 100) )
 		progress_bar_detailed(x + INTERFACE_GRID, y + INTERFACE_GRID * 5, "Magic", MASTERY_TO_SKILL(player_state.mastery.general_magic), string.format("%.2f%%", MASTERY_TO_SKILL(player_state.mastery.general_magic) * 100) )
+		progress_bar_detailed(x + INTERFACE_GRID, y + INTERFACE_GRID * 7, "Cooking", MASTERY_TO_SKILL(player_state.mastery.cooking), string.format("%.2f%%", MASTERY_TO_SKILL(player_state.mastery.cooking) * 100) )
+		progress_bar_detailed(x + INTERFACE_GRID, y + INTERFACE_GRID * 9, "Bonework", MASTERY_TO_SKILL(player_state.mastery.boneworking), string.format("%.2f%%", MASTERY_TO_SKILL(player_state.mastery.boneworking) * 100) )
 	end
 end
 
@@ -568,6 +584,7 @@ local function right_side_panel(req)
 	end
 
 	draw_item(req, WINDOWS_WIDTH - right_panel_width + INTERFACE_GRID *2, INTERFACE_GRID * 6, player_state.weapon, true, false, false)
+	draw_item(req, WINDOWS_WIDTH - right_panel_width + INTERFACE_GRID *16, INTERFACE_GRID * 13, player_state.body_armor, true, false, false)
 	draw_item(req, WINDOWS_WIDTH - INTERFACE_GRID *8, INTERFACE_GRID *19, player_state.boots, true, false, false)
 	for i = 1, 10, 1 do
 		local item_x  = WINDOWS_WIDTH - right_panel_width + INTERFACE_GRID + INTERFACE_GRID * ring_xy[i][1]
