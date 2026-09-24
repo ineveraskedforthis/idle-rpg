@@ -49,7 +49,8 @@ return function (player, model_description)
 		state = ActorModelStateEnum.Idle,
 		death_timer = 0,
 		orientation = 1,
-		being_hit_timer = 0
+		being_hit_timer = 0,
+		attack_progress = 0
 	}
 	player.hp = BASE_MAX_HP
 	player.hp_max = BASE_MAX_HP

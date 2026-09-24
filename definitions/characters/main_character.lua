@@ -17,7 +17,6 @@ local basic_hero = {
 		love.graphics.newQuad(400 * 8, 0, 400, 600, hero),
 	},
 	walk_timer_mult = 1 / 200,
-	attack_timer_mult = 1 / 100,
 	idle_frames = {love.graphics.newQuad(0, 0, 400, 600, hero)},
 	attack_frames =  {love.graphics.newQuad(0, 0, 400, 600, hero)},
 	dead_frame =  {love.graphics.newQuad(0, 0, 400, 600, hero)},

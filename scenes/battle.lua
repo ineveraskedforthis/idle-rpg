@@ -90,7 +90,7 @@ local function draw_character(x, y, model, state, camera_shift)
 		)
 	elseif state.state == ActorModelStateEnum.Attacking then
 		-- replace with per entity timer
-		local frame = math.floor(timer * model.attack_timer_mult * #model.idle_frames) % #model.idle_frames
+		local frame = math.floor(state.attack_progress * #model.attack_frames)
 		love.graphics.draw(
 			model.image,
 			model.attack_frames[frame + 1],
@@ -102,18 +102,17 @@ local function draw_character(x, y, model, state, camera_shift)
 	elseif  state.state ==ActorModelStateEnum.Dead then
 		if state.death_timer < 0.5 then
 			love.graphics.setColor(2, 2 * math.sin(state.death_timer * 16 *math.pi), 2 * math.sin(state.death_timer * 16 *math.pi))
-			local frame = math.floor(timer / 50 * #model.idle_frames) % #model.idle_frames
+			local frame = math.floor(state.death_timer * #model.dead_frame)
 			love.graphics.draw(
 				model.image,
-				model.idle_frames[frame + 1],
+				model.dead_frame[frame + 1],
 				model_x, model_y,
 				0,
 				model.image_base_scale * state.orientation,
 				model.image_base_scale
 			)
 		else
-			-- replace with per entity timer
-			local frame = math.floor(timer * model.attack_timer_mult * #model.idle_frames) % #model.idle_frames
+			local frame = math.min(#model.dead_frame - 1, state.death_timer * #model.dead_frame)
 			love.graphics.draw(
 				model.image,
 				model.dead_frame[frame + 1],
@@ -467,6 +466,8 @@ local function update_actor(dt, vfx, stage, actor_index, allies, enemies)
 		assert(skill_index ~= nil)
 		local skill = skills[skill_index]
 		skill.update(vfx, stage, actor, dt, actor.model,  actor.model_description, false, 1)
+		actor.model.attack_progress = actor.current_action.progress
+		actor.model.state =ActorModelStateEnum.Attacking
 		if actor.current_action.completed then
 			reset_action(actor)
 		end

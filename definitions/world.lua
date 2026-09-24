@@ -38,8 +38,6 @@ function w.load(economy)
 	local large_rat = {
 		attack_skill = 0,
 		hp_max = 15,
-		melee_defense = 0,
-		spell_defense = 0,
 		model_description = {
 			size_x = 300,
 			size_y = 300,
@@ -50,7 +48,6 @@ function w.load(economy)
 			attack_frames = {love.graphics.newQuad(0, 300, 300, 300, big_rat_image)},
 			dead_frame = {love.graphics.newQuad(300, 300, 300, 300, big_rat_image)},
 			walk_timer_mult = 1 / 100,
-			attack_timer_mult = 1 / 100,
 		},
 		base_damage = 1,
 		attack_experience = 0,
@@ -67,8 +64,6 @@ function w.load(economy)
 	local rat_baron = {
 		attack_skill = 0.1,
 		hp_max = 50,
-		melee_defense = 0.2,
-		spell_defense = 0.1,
 		model_description = {
 			size_x = baron_rat_image_x,
 			size_y = baron_rat_image_y,
@@ -79,11 +74,35 @@ function w.load(economy)
 			attack_frames = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
 			dead_frame = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
 			walk_timer_mult = 1,
-			attack_timer_mult = 1,
 		},
 		base_damage = 1,
 		attack_experience = 1,
 		spell_experience = 1,
+		speed = 100,
+		loot_items = {economy.rat_body},
+		loot_amount = {},
+		loot_resources = {}
+	}
+
+	local knight_rat_image = love.graphics.newImage("assets/rat-knight/base.png")
+	---@type EnemyPrototype
+	local rat_knight = {
+		attack_skill = 0.1,
+		hp_max = 50,
+		model_description = {
+			size_x = 500,
+			size_y = 500,
+			image = knight_rat_image,
+			image_base_scale = 0.5,
+			walk_frames = {love.graphics.newQuad(0, 0, 500, 500, knight_rat_image), love.graphics.newQuad(500, 0, 500, 500, knight_rat_image)},
+			idle_frames = {love.graphics.newQuad(0, 0, 500, 500, knight_rat_image)},
+			attack_frames = {love.graphics.newQuad(0, 1000, 500, 500, knight_rat_image), love.graphics.newQuad(0, 500, 500, 500, knight_rat_image)},
+			dead_frame = {love.graphics.newQuad(500, 500, 500, 500, knight_rat_image)},
+			walk_timer_mult = 1 / 100,
+		},
+		base_damage = 5,
+		attack_experience = 5,
+		spell_experience = 0,
 		speed = 100,
 		loot_items = {economy.rat_body},
 		loot_amount = {},
@@ -100,7 +119,7 @@ function w.load(economy)
 		},
 		elite_composition = {
 			{
-				unit = rat_baron,
+				unit = rat_knight,
 				weight = 1
 			}
 		}
@@ -118,7 +137,7 @@ function w.load(economy)
 		display_radius = 3,
 		background = love.graphics.newImage("assets/bg/ledge.png"),
 		controlled_by = 1,
-		basic_armies = 6,
+		basic_armies = 8,
 		elite_armies = 0,
 		local_characters = {
 			butcher
@@ -157,7 +176,7 @@ function w.load(economy)
 		background = love.graphics.newImage("assets/bg/ledge.png"),
 		controlled_by = 1,
 		basic_armies = 2,
-		elite_armies = 0,
+		elite_armies = 1,
 		local_characters = {},
 		pack_size = 20
 	}

@@ -32,8 +32,6 @@
 ---@field attack_experience number
 ---@field spell_experience number
 ---@field base_damage number
----@field melee_defense number
----@field spell_defense number
 ---@field model_description ActorModelDescription
 ---@field speed number
 ---@field loot_resources ResourceIndex[]
@@ -233,7 +231,6 @@
 ---@field walk_frames love.Quad[]
 ---@field walk_timer_mult number
 ---@field idle_frames love.Quad[]
----@field attack_timer_mult number
 ---@field attack_frames love.Quad[]
 ---@field dead_frame love.Quad[]
 
@@ -244,6 +241,7 @@
 ---@field state ActorModelStateEnum
 ---@field walk_timer number
 ---@field death_timer number
+---@field attack_progress number
 ---@field being_hit_timer number
 ---@field orientation number
 

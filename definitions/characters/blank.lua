@@ -10,7 +10,6 @@ local basic_skeleton = {
 	idle_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
 	attack_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
 	walk_timer_mult = 1,
-	attack_timer_mult =1,
 	dead_frame = {love.graphics.newQuad(40, 0, 40, 40, basic)},
 }
 
@@ -62,7 +61,8 @@ return function ()
 			orientation = 1,
 			position = 0,
 			state = ActorModelStateEnum.Idle,
-			walk_timer = 0
+			walk_timer = 0,
+			attack_progress = 0
 		},
 		model_description = basic_skeleton,
 		on_kill_triggered = false,
