@@ -30,6 +30,8 @@ return function (render, text, rx, ry, rw, rh, x, y, conversation)
 			style.default_font()
 		end
 		local height = style.default_font_height()
+		local _, lines = style.default_font_wrap(text, rw)
+		height = height * #lines
 		love.graphics.printf(text, rx, ry + rh / 2 - height / 2, rw, "center")
 	end
 	if not render then

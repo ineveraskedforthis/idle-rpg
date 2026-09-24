@@ -31,6 +31,12 @@ return function ()
 		hp_view = BASE_MAX_HP,
 		in_battle = false,
 		inventory = EMPTY_INVENTORY(),
+		price_belief_buy = EMPTY_INVENTORY(1),
+		price_belief_sell = EMPTY_INVENTORY(1),
+		item_kind_price_belief_buy = EMPTY_ITEM_KIND_VECTOR(1),
+		item_kind_price_belief_sell = EMPTY_ITEM_KIND_VECTOR(1),
+		name = "Nameless",
+		coins = 0,
 		is_enemy = false,
 		item_skills_queue = {},
 		items_queue = {},
@@ -75,6 +81,7 @@ return function ()
 		spell_damage = 0,
 		stash = {},
 		weapon = INVALID_ITEM_INDEX,
+		target_recipes = {}
 	}
 	return res
 end

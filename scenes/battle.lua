@@ -380,57 +380,28 @@ function battle_scene.generate_enemies(player, stage, location_index, elite)
 
 		local prot = composition[selected_unit].unit
 
-		---@type ActorState
-		local starting_enemy = {
-			current_action = {
-				completed = false,
-				kind = ActionEnum.Nothing,
-				progress = 0,
-				used_item =INVALID_ITEM_INDEX,
-				used_skill = nil
-			},
-			death_progress = 0,
-			hp = prot.hp_max,
-			hp_max = prot.hp_max,
-			hp_view = prot.hp_max,
-			in_battle = true,
-			item_skills_queue = {},
-			items_queue = {},
-			mastery = {
-				general_magic = prot.spell_experience,
-				melee_defense = prot.attack_experience,
-				melee_weapon = prot.attack_experience,
-				cooking = 0
-			},
-			melee_damage = prot.base_damage,
-			mental = {
-				learning_speed = 0
-			},
-			micro_cooldown_item_activation = 0,
-			model = {
-				death_timer = 0,
-				orientation = -1,
-				position = math.sqrt(love.math.random() + 0.15) * stage.distance,
-				state = ActorModelStateEnum.Idle,
-				walk_timer = math.random(),
-				being_hit_timer = 0
-			},
-			model_description = prot.model_description,
-			rings = {},
-			shield = 0,
-			speed = prot.speed,
-			spell_damage =prot.base_damage,
-			stash = {},
-			weapon = INVALID_ITEM_INDEX,
-			boots = INVALID_ITEM_INDEX,
-			location = location_index,
-			on_kill_triggered = false,
-			is_enemy = true,
-			inventory = {},
-			loot_amount = prot.loot_amount,
-			loot_items = prot.loot_items,
-			loot_resources = prot.loot_resources
-		}
+		local starting_enemy = require "definitions.characters.blank"()
+
+		starting_enemy.model.orientation = -1
+		starting_enemy.model.position = math.sqrt(love.math.random() + 0.15) * stage.distance
+		starting_enemy.model.walk_timer = math.random()
+		starting_enemy.model_description = prot.model_description
+		starting_enemy.mastery.general_magic = prot.spell_experience
+		starting_enemy.mastery.melee_defense = prot.attack_experience
+		starting_enemy.mastery.melee_weapon = prot.attack_experience
+		starting_enemy.hp = prot.hp_max
+		starting_enemy.hp_max = prot.hp_max
+		starting_enemy.hp_view = prot.hp_max
+		starting_enemy.melee_damage = prot.base_damage
+		starting_enemy.spell_damage = prot.base_damage
+		starting_enemy.mental.learning_speed = 0
+		starting_enemy.loot_amount = prot.loot_amount
+		starting_enemy.loot_items = prot.loot_items
+		starting_enemy.loot_resources = prot.loot_resources
+		starting_enemy.speed = prot.speed
+		starting_enemy.location = location_index
+		starting_enemy.is_enemy = true
+
 		table.insert(stage.enemies, starting_enemy)
 	end
 end

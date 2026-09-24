@@ -106,6 +106,11 @@ function w.load(economy)
 		}
 	}
 
+	local butcher = require "definitions.characters.blank"()
+	butcher.coins = 10
+	butcher.name = "Butcher"
+	table.insert(butcher.target_recipes, economy.buther_rat)
+
 	Locations[1] = {
 		name = "Grimtide",
 		x = 155,
@@ -115,7 +120,9 @@ function w.load(economy)
 		controlled_by = 1,
 		basic_armies = 2,
 		elite_armies = 0,
-		local_characters = {}
+		local_characters = {
+			butcher
+		}
 	}
 	Locations[2] = {
 		name = "Rat Hills",

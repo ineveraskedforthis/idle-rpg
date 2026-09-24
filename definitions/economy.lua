@@ -96,6 +96,7 @@ end
 
 ---@class EconomyDefs
 ---@field rat_body ItemKindIndex
+---@field buther_rat RecipeIndex
 local economy_table = {}
 
 economy_table.rat_body = {
@@ -164,7 +165,7 @@ function economy_table.load_economy()
 		required_weapon_durability_loss = 0
 	})
 
-	create_recipe ({
+	local butcher = create_recipe ({
 		name = "Butcher rat",
 		inputs = {},
 		inputs_amount = {},
@@ -190,14 +191,31 @@ function economy_table.load_economy()
 	})
 
 	economy_table.rat_body = RatBody
+	economy_table.buther_rat = butcher
 end
 
-
-function EMPTY_INVENTORY()
+---@param base_value number?
+function EMPTY_INVENTORY(base_value)
+	if base_value == nil then
+		base_value = 0
+	end
 	---@type number[]
 	local t = {}
 	for index, value in ipairs(Resources) do
-		t[index] = 0
+		t[index] = base_value
+	end
+	return t
+end
+
+---@param base_value number?
+function EMPTY_ITEM_KIND_VECTOR(base_value)
+	if base_value == nil then
+		base_value = 0
+	end
+	---@type number[]
+	local t = {}
+	for index, value in ipairs(BaseItemTable) do
+		t[index] = base_value
 	end
 	return t
 end

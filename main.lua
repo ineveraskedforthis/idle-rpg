@@ -398,11 +398,11 @@ local function display_stats(req, x, y)
 	if req.render then
 		style.dense_information_font()
 		love.graphics.print("HP: " .. tostring(player_state.hp), x + INTERFACE_GRID, y + INTERFACE_GRID)
-		love.graphics.print("Max HP: " .. tostring(player_state.hp_max), x + INTERFACE_GRID, y + INTERFACE_GRID)
-		love.graphics.print("Shield: " .. tostring(player_state.shield), x + INTERFACE_GRID, y + INTERFACE_GRID * 3)
-		love.graphics.print("Speed: " .. tostring(player_state.speed), x + INTERFACE_GRID, y + INTERFACE_GRID * 5)
-		love.graphics.print("Melee damage: " .. tostring(player_state.melee_damage), x + INTERFACE_GRID, y + INTERFACE_GRID * 7)
-		love.graphics.print("Spell damage: " .. tostring(player_state.spell_damage), x + INTERFACE_GRID, y + INTERFACE_GRID * 9)
+		love.graphics.print("Max HP: " .. tostring(player_state.hp_max), x + INTERFACE_GRID, y + INTERFACE_GRID * 3)
+		love.graphics.print("Shield: " .. tostring(player_state.shield), x + INTERFACE_GRID, y + INTERFACE_GRID * 5)
+		love.graphics.print("Speed: " .. tostring(player_state.speed), x + INTERFACE_GRID, y + INTERFACE_GRID * 7)
+		love.graphics.print("Melee damage: " .. tostring(player_state.melee_damage), x + INTERFACE_GRID, y + INTERFACE_GRID * 9)
+		love.graphics.print("Spell damage: " .. tostring(player_state.spell_damage), x + INTERFACE_GRID, y + INTERFACE_GRID * 11)
 	end
 end
 
@@ -795,6 +795,8 @@ local function camp(req, x, y)
 		::continue::
 	end
 
+	local location = Locations[player_state.location]
+
 	for index, value in ipairs(Resources) do
 		if player_state.inventory[index] == 0 then
 			goto continue
@@ -822,6 +824,136 @@ local function camp(req, x, y)
 
 		::continue::
 	end
+
+
+	for index, value in ipairs(Resources) do
+		for _, local_crafter in ipairs(location.local_characters) do
+			for _, recipe_index in ipairs(local_crafter.target_recipes) do
+				local r = Recipes[recipe_index.value]
+				for input_index, input_resource_index in ipairs(r.inputs) do
+					if local_crafter.inventory[input_resource_index.value] >= r.inputs_amount[input_index] then
+						goto continue
+					end
+					if player_state.inventory[input_resource_index.value] == 0 then
+						goto continue
+					end
+
+
+					local resource = Resources[input_resource_index.value]
+					local price = local_crafter.price_belief_buy[input_resource_index.value]
+
+					if local_crafter.coins < price then
+						goto continue
+					end
+
+					local text = "Sell " .. resource.name .. " to " .. local_crafter.name .. " for " .. tostring(price)
+
+					if button(req.render, text, x + grid_column * INTERFACE_GRID * 20, y + grid_row * INTERFACE_GRID * 6, INTERFACE_GRID * 20, INTERFACE_GRID * 6, req.mx, req.my) then
+						player_state.inventory[index] = player_state.inventory[index] - 1
+						local_crafter.inventory[index] = local_crafter.inventory[index] + 1
+						player_state.coins = player_state.coins + price
+						local_crafter.coins = local_crafter.coins - price
+					end
+
+					grid_column = grid_column + 1
+					if grid_column > 3 then
+						grid_column = 0
+						grid_row = grid_row + 1
+					end
+					::continue::
+				end
+
+				for _, input_item_kind_index in ipairs(r.inputs_items) do
+					local already_has = false
+					for _, item in ipairs(local_crafter.stash) do
+						local i = RETRIEVE_ITEM(item)
+						if i then
+							if i.kind.value == input_item_kind_index.value then
+								already_has = true
+							end
+						end
+					end
+					if already_has then
+						goto continue
+					end
+
+					local player_has = false
+					local player_stash_index = nil
+					for stash_index, item in ipairs(player_state.stash) do
+						local i = RETRIEVE_ITEM(item)
+						if i then
+							if i.kind.value == input_item_kind_index.value then
+								player_stash_index = stash_index
+							end
+						end
+					end
+					if player_stash_index == nil then
+						goto continue
+					end
+
+					local price = local_crafter.item_kind_price_belief_buy[input_item_kind_index.value]
+
+					if local_crafter.coins < price then
+						goto continue
+					end
+
+					local kind = GET_ITEM_KIND(input_item_kind_index)
+
+					local text = "Sell " .. kind.name .. " to " .. local_crafter.name .. " for " .. tostring(price)
+
+					if button(req.render, text, x + grid_column * INTERFACE_GRID * 20, y + grid_row * INTERFACE_GRID * 6, INTERFACE_GRID * 20, INTERFACE_GRID * 6, req.mx, req.my) then
+						player_state.coins = player_state.coins + price
+						local_crafter.coins = local_crafter.coins - price
+
+						local transfer = player_state.stash[player_stash_index]
+						table.remove(player_state.stash, player_stash_index)
+						table.insert(local_crafter.stash, transfer)
+					end
+
+					grid_column = grid_column + 1
+					if grid_column > 3 then
+						grid_column = 0
+						grid_row = grid_row + 1
+					end
+					::continue::
+				end
+
+				for output_index, output_item_index in ipairs(r.outputs) do
+					if player_state.inventory[output_item_index.value] >= r.outputs_amount[output_index] then
+						goto continue
+					end
+					if local_crafter.inventory[output_item_index.value] == 0 then
+						goto continue
+					end
+
+
+					local resource = Resources[output_item_index.value]
+					local price = local_crafter.price_belief_buy[output_item_index.value]
+
+					if player_state.coins < price then
+						goto continue
+					end
+
+					local text = "Buy " .. resource.name .. " from " .. local_crafter.name .. " for " .. tostring(price)
+
+					if button(req.render, text, x + grid_column * INTERFACE_GRID * 20, y + grid_row * INTERFACE_GRID * 6, INTERFACE_GRID * 20, INTERFACE_GRID * 6, req.mx, req.my) then
+						player_state.inventory[index] = player_state.inventory[index] + 1
+						local_crafter.inventory[index] = local_crafter.inventory[index] - 1
+						player_state.coins = player_state.coins - price
+						local_crafter.coins = local_crafter.coins + price
+					end
+
+					grid_column = grid_column + 1
+					if grid_column > 3 then
+						grid_column = 0
+						grid_row = grid_row + 1
+					end
+					::continue::
+				end
+			end
+		end
+	end
+
 end
 
 ---@param req InterfaceRequest

@@ -102,10 +102,17 @@
 ---@field on_kill_triggered boolean
 ---@field is_enemy boolean
 ---@field inventory number[]
+---@field price_belief_sell number[]
+---@field price_belief_buy number[]
+---@field item_kind_price_belief_sell number[]
+---@field item_kind_price_belief_buy number[]
 ---@field loot_resources ResourceIndex[]
 ---@field loot_amount number[]
 ---@field loot_items ItemKindIndex[]
 ---@field faction number|nil
+---@field target_recipes RecipeIndex[]
+---@field coins number
+---@field name string
 
 --[[
 ---@class (exact) Enemy

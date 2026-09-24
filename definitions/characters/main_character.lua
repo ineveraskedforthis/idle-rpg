@@ -27,5 +27,6 @@ local basic_hero = {
 return function ()
 	local b = require "definitions.characters.blank"()
 	b.model_description = basic_hero
+	b.name = "Vlagra"
 	return b
 end

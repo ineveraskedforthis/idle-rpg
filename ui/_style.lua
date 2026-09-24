@@ -87,6 +87,12 @@ return {
 		return default_font:getHeight( )
 	end,
 
+	---@param text string
+	---@param limit number
+	default_font_wrap = function (text, limit)
+		return default_font:getWrap(text, limit)
+	end,
+
 	header_font = function ()
 		love.graphics.setFont(header_font)
 	end,
