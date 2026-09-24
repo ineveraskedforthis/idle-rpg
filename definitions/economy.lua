@@ -1,0 +1,205 @@
+
+---@type Resource[]
+Resources = {}
+---comment
+---@param def Resource
+---@return ResourceIndex
+local function create_resource(def)
+	local next_position = #Resources
+	table.insert(Resources, def)
+	return {
+		value = next_position + 1
+	}
+end
+---@type Recipe[]
+Recipes = {}
+---comment
+---@param def Recipe
+---@return RecipeIndex
+local function create_recipe(def)
+	local next_position = #Recipes
+	table.insert(Recipes, def)
+	return {
+		value = next_position + 1
+	}
+end
+
+---@type ItemKind[]
+local BaseItemTable = {}
+
+---comment
+---@param def ItemKind
+---@return ItemKindIndex
+local function register_item(def)
+	local next_position = #BaseItemTable
+	table.insert(BaseItemTable, def)
+	return {
+		value = next_position + 1
+	}
+end
+
+---comment
+---@param id ItemKindIndex
+---@return ItemKind
+function  GET_ITEM_KIND(id)
+	return BaseItemTable[id.value]
+end
+
+local function register_weapon(name, image, damage, base_attack_speed, speed_modifier)
+	---@type ItemKind
+	local item = {
+		damage = damage,
+		name = name,
+		image = image,
+		base_attack_speed = base_attack_speed,
+		slot = ItemSlot.Weapon,
+		speed_modifier = speed_modifier,
+		range = 10,
+		shield = 0,
+		image_kind = ItemImageSize.Large
+	}
+	return register_item(item)
+end
+
+local function register_boots(name, image, speed_modifier, base_shield)
+	---@type ItemKind
+	local item = {
+		name = name,
+		image = image,
+		damage = 0,
+		base_attack_speed = 0,
+		slot = ItemSlot.Boots,
+		range = 0,
+		speed_modifier = speed_modifier,
+		shield = base_shield,
+		image_kind = ItemImageSize.Medium
+	}
+	return register_item(item)
+end
+
+
+local function register_ring(name, image, base_shield)
+	---@type ItemKind
+	local item = {
+		name = name,
+		image = image,
+		damage = 0,
+		base_attack_speed = 0,
+		slot = ItemSlot.Ring,
+		range = 0,
+		speed_modifier = 0,
+		shield = base_shield,
+		image_kind = ItemImageSize.Small
+	}
+	return register_item(item)
+end
+
+---@class EconomyDefs
+---@field rat_body ItemKindIndex
+local economy_table = {}
+
+economy_table.rat_body = {
+	value = 0
+}
+
+function economy_table.load_economy()
+	Resources = {}
+	BaseItemTable = {}
+
+	local RatSkin = create_resource({
+		name = "Rat skin"
+	})
+	local RatFang = create_resource({
+		name = "Rat fang"
+	})
+	local RatMeat = create_resource({
+		name = "Rat meat",
+		restore_hp = 1
+	})
+	local RatSteak = create_resource({
+		name = "Rat steak",
+		restore_hp = 3
+	})
+	local OrbMagus = create_resource({
+		name = "Orb of Magus",
+		restore_shield = 100
+	})
+
+	local Boots = register_boots("Boots", love.graphics.newImage("boots.png"), 1.1, 5)
+	local Knife = register_weapon("Knife", love.graphics.newImage("knife.png"), 2, 2.25, 0)
+	local Ring = register_ring("Ring", love.graphics.newImage("ring.png"), 5)
+	local RatBody = register_item {
+		base_attack_speed = 0,
+		damage = 0,
+		image = love.graphics.newImage("assets/items/rat.png"),
+		image_kind = ItemImageSize.Medium,
+		name = "Rat body",
+		range = 0,
+		shield = 0,
+		slot =ItemSlot.None,
+		speed_modifier = 0
+	}
+
+	create_recipe ({
+		name = "Cook rat meat",
+		inputs = {RatMeat},
+		inputs_amount = {1},
+		outputs = {RatSteak},
+		outputs_amount = {1},
+		skill_required = {
+			general_magic = 0,
+			cooking = 0,
+			melee_defense = 0,
+			melee_weapon = 0
+		},
+		skill_improvement = {
+			general_magic = 0,
+			cooking = 1,
+			melee_defense = 0,
+			melee_weapon = 0
+		},
+		required_weapon = nil,
+		inputs_items = {},
+		outputs_items = {},
+		required_weapon_durability_loss = 0
+	})
+
+	create_recipe ({
+		name = "Butcher rat",
+		inputs = {},
+		inputs_amount = {},
+		inputs_items = {RatBody},
+		outputs = {RatMeat, RatSkin, RatFang},
+		outputs_amount = {1, 1, 2},
+		outputs_items = {},
+		required_weapon = Knife,
+		required_weapon_durability_loss = 0.01,
+		skill_improvement = {
+			cooking = 1,
+			general_magic = 0,
+			melee_defense = 0,
+			melee_weapon = 0
+		},
+		skill_required = {
+			cooking = 0,
+			general_magic = 0,
+			melee_defense = 0,
+			melee_weapon = 0,
+		},
+		required_tool_durability_loss = 0
+	})
+
+	economy_table.rat_body = RatBody
+end
+
+
+function EMPTY_INVENTORY()
+	---@type number[]
+	local t = {}
+	for index, value in ipairs(Resources) do
+		t[index] = 0
+	end
+	return t
+end
+
+return economy_table

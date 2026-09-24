@@ -22,6 +22,7 @@ return function (player, model_description)
 		melee_weapon = 0,
 		melee_defense = 0,
 		general_magic = 0,
+		cooking = 0,
 	}
 	player.mental = {
 		learning_speed = BASE_LEARNING_RATE

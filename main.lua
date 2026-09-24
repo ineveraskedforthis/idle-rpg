@@ -2,8 +2,12 @@ require "skills._manager"
 require "custom-math"
 require "types"
 require "defines"
-require "definitions.items"
 require "definitions.affixes"
+
+local economy = require "definitions.economy"
+local world = require "definitions.world"
+economy.load_economy()
+world.load(economy)
 
 local update_player_values = require "effect.player-update"
 local style = require "ui._style"
@@ -22,7 +26,8 @@ local battle_scene = require "scenes.battle"
 SceneEnum = {
 	MainMenu = 1,
 	Map = 2,
-	Battle = 3
+	Battle = 3,
+	Camp = 4,
 }
 ---@type SceneEnum
 local scene = SceneEnum.MainMenu
@@ -51,12 +56,11 @@ end
 ---@type number
 local timer = 0
 
-
-
 ---@class ItemDatabase
 ---@field data_array Item[]
 ---@field generation number[]
 ---@field available_id number
+
 
 ---@class ItemIndex
 ---@field id number
@@ -146,218 +150,13 @@ function  RETRIEVE_ITEM(index)
 	return ITEM_DB.data_array[index.id]
 end
 
-
-local basic = love.graphics.newImage("hero-battle.png")
-
----@type ActorModelDescription
-local basic_skeleton = {
-	size_x = 40,
-	size_y = 40,
-	image = basic,
-	image_base_scale = 2,
-	walk_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
-	idle_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
-	attack_frames = {love.graphics.newQuad(0, 0, 40, 40, basic)},
-	walk_timer_mult = 1,
-	attack_timer_mult =1,
-	dead_frame = {love.graphics.newQuad(40, 0, 40, 40, basic)},
-}
-
-local big_rat_image =love.graphics.newImage("assets/rat-big/base.png")
----@type EnemyPrototype
-local large_rat = {
-	attack_skill = 0.01,
-	hp_max = 5,
-	melee_defense = 0.01,
-	spell_defense = 0,
-	model_description = {
-		size_x = 300,
-		size_y = 300,
-		image = big_rat_image,
-		image_base_scale = 0.25,
-		walk_frames = {love.graphics.newQuad(0, 0, 300, 300, big_rat_image), love.graphics.newQuad(300, 0, 300, 300, big_rat_image)},
-		idle_frames = {love.graphics.newQuad(300, 0, 300, 300, big_rat_image)},
-		attack_frames = {love.graphics.newQuad(0, 300, 300, 300, big_rat_image)},
-		dead_frame = {love.graphics.newQuad(300, 300, 300, 300, big_rat_image)},
-		walk_timer_mult = 1 / 100,
-		attack_timer_mult = 1 / 100,
-	},
-	base_damage = 1,
-	attack_experience = 0.1,
-	speed = 200,
-	spell_experience = 0
-}
-
-local baron_rat_image = love.graphics.newImage("assets/rat-baron/base.png")
-local baron_rat_image_x, baron_rat_image_y = baron_rat_image:getDimensions()
----@type EnemyPrototype
-local rat_baron = {
-	attack_skill = 0.1,
-	hp_max = 50,
-	melee_defense = 0.2,
-	spell_defense = 0.1,
-	model_description = {
-		size_x = baron_rat_image_x,
-		size_y = baron_rat_image_y,
-		image = baron_rat_image,
-		image_base_scale = 0.5,
-		walk_frames = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
-		idle_frames = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
-		attack_frames = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
-		dead_frame = {love.graphics.newQuad(0, 0, baron_rat_image_x, baron_rat_image_y, baron_rat_image)},
-		walk_timer_mult = 1,
-		attack_timer_mult = 1,
-	},
-	base_damage = 1,
-	attack_experience = 1,
-	spell_experience = 1,
-	speed = 100
-}
-
----@type Faction[]
-Factions = {}
----@type FactionState[]
-FactionsState  ={}
-
-Factions[1] = {
-	name = "Duchy of Ledgeroad",
-	basic_composition = {
-		{
-			unit = large_rat,
-			weight = 1
-		}
-	},
-	elite_composition = {
-		{
-			unit = rat_baron,
-			weight = 1
-		}
-	}
-}
-
----@type Location[]
-Locations = {}
-
----@type table<number, number[]>
-Roads = {}
-
-Locations[1] = {
-	name = "Grimtide",
-	x = 155,
-	y = 187,
-	display_radius = 3,
-	background = love.graphics.newImage("assets/bg/ledge.png"),
-	controlled_by = 1,
-	basic_armies = 10,
-	elite_armies = 1
-}
-Locations[2] = {
-	name = "Rat Hills",
-	x = 176,
-	y = 202,
-	display_radius = 3,
-	background = love.graphics.newImage("assets/bg/ledge.png"),
-	controlled_by = 1,
-	basic_armies = 10,
-	elite_armies = 0
-}
-
--- TODO: better registration of roads
-Roads[1] = {2}
-Roads[2] = {1}
-
-StartingLocation = 1
-
 ---@type number[]
 local location_highlights = {}
 
 ---@type LocationState[]
 LocationData = {}
 
-
-local hero = love.graphics.newImage("character-basic.png")
-
----@type ActorModelDescription
-local basic_hero = {
-	size_x = 400,
-	size_y = 600,
-	image = hero,
-	image_base_scale = 0.25,
-	walk_frames = {
-		love.graphics.newQuad(400 * 1, 0, 400, 600, hero),
-		love.graphics.newQuad(400 * 2, 0, 400, 600, hero),
-		love.graphics.newQuad(400 * 3, 0, 400, 600, hero),
-		love.graphics.newQuad(400 * 4, 0, 400, 600, hero),
-		love.graphics.newQuad(400 * 5, 0, 400, 600, hero),
-		love.graphics.newQuad(400 * 6, 0, 400, 600, hero),
-		love.graphics.newQuad(400 * 7, 0, 400, 600, hero),
-		love.graphics.newQuad(400 * 8, 0, 400, 600, hero),
-	},
-	walk_timer_mult = 1 / 200,
-	attack_timer_mult = 1 / 100,
-	idle_frames = {love.graphics.newQuad(0, 0, 400, 600, hero)},
-	attack_frames =  {love.graphics.newQuad(0, 0, 400, 600, hero)},
-	dead_frame =  {love.graphics.newQuad(0, 0, 400, 600, hero)},
-}
-
-
----@type ActorState
-local player_state = {
-	attack_range = 0,
-	stash = {},
-	melee_damage = 0,
-	spell_damage = 0,
-	rings = {
-		INVALID_ITEM_INDEX,
-		INVALID_ITEM_INDEX,
-		INVALID_ITEM_INDEX,
-		INVALID_ITEM_INDEX,
-		INVALID_ITEM_INDEX,
-		INVALID_ITEM_INDEX,
-		INVALID_ITEM_INDEX,
-		INVALID_ITEM_INDEX,
-		INVALID_ITEM_INDEX,
-		INVALID_ITEM_INDEX,
-	},
-	mastery = {
-		melee_weapon = 0,
-		melee_defense = 0,
-		general_magic = 0,
-	},
-	mental = {
-		learning_speed = 0.01
-	},
-	current_action = {
-		kind = ActionEnum.Nothing,
-		used_item = INVALID_ITEM_INDEX,
-		used_skill = nil,
-		progress = 0,
-		completed = true,
-	},
-	items_queue = {},
-	weapon = INVALID_ITEM_INDEX,
-	boots = INVALID_ITEM_INDEX,
-	micro_cooldown_item_activation = 0,
-	item_skills_queue = {},
-	in_battle = false,
-	model_description = basic_hero,
-	model =  {
-		position = 0,
-		walk_timer = 0,
-		state = ActorModelStateEnum.Idle,
-		death_timer = 0,
-		being_hit_timer = 0,
-		orientation = 1
-	},
-	hp = 0,
-	hp_max = 15,
-	hp_view = 0,
-	shield = 0,
-	speed = 1,
-	death_progress = 0,
-	on_kill_triggered = false,
-	is_enemy = false
-}
+local player_state = require "definitions.characters.main_character"()
 
 ---@type Stage
 local stage = {
@@ -410,7 +209,7 @@ local function unequip_item(item)
 	if not data.equipped then
 		return
 	end
-	local slot = BaseItemTable[data.kind].slot
+	local slot = GET_ITEM_KIND(data.kind).slot
 	if slot ==ItemSlot.Boots then
 		if player_state.boots.id == item.id then
 			data.equipped = false
@@ -443,7 +242,7 @@ local function equip_item(item)
 	if data.equipped then
 		return
 	end
-	local slot = BaseItemTable[data.kind].slot
+	local slot = GET_ITEM_KIND(data.kind).slot
 	if slot ==ItemSlot.Boots then
 		local current_boots = RETRIEVE_ITEM(player_state.boots)
 		if current_boots then
@@ -494,7 +293,7 @@ local function draw_item(req, x, y, item, true_size, draw_border, draw_bg)
 	local durability_offset = size_y - 7
 	local durability_width = size_x
 	local offset_x = 0
-	local slot = BaseItemTable[item_data.kind].slot
+	local slot = GET_ITEM_KIND(item_data.kind).slot
 	local border_width = INTERFACE_GRID * 6
 	local border_height = INTERFACE_GRID * 6
 	if true_size then
@@ -551,11 +350,12 @@ local function draw_item(req, x, y, item, true_size, draw_border, draw_bg)
 		if rect_detection(x, y, border_width, border_height, req.mx, req.my) then
 			item_data.highlight_opacity = 0.5
 		end
-		local img = BaseItemTable[item_data.kind].image
+		local img = GET_ITEM_KIND(item_data.kind).image
 		love.graphics.setColor(1, 1, 1)
 		love.graphics.draw(img, x + offset_x, y, 0, scale_mult, scale_mult)
 	else
 		if rect_detection(x, y, border_width, border_height, req.mx, req.my) then
+			-- TODO: remember if previosly pressed item was this one
 			print (req.mouse_button, req.presses)
 			if req.mouse_button == MouseButton.Left  then
 				if req.presses <= 1 then
@@ -597,6 +397,7 @@ local function display_stats(req, x, y)
 	panel(req.render, x, y, INTERFACE_GRID * 34, INTERFACE_GRID * 21 )
 	if req.render then
 		style.dense_information_font()
+		love.graphics.print("HP: " .. tostring(player_state.hp), x + INTERFACE_GRID, y + INTERFACE_GRID)
 		love.graphics.print("Max HP: " .. tostring(player_state.hp_max), x + INTERFACE_GRID, y + INTERFACE_GRID)
 		love.graphics.print("Shield: " .. tostring(player_state.shield), x + INTERFACE_GRID, y + INTERFACE_GRID * 3)
 		love.graphics.print("Speed: " .. tostring(player_state.speed), x + INTERFACE_GRID, y + INTERFACE_GRID * 5)
@@ -637,13 +438,12 @@ local function display_item_description(req, x, y)
 	local selected = RETRIEVE_ITEM(selected_item)
 	assert (selected)
 
-	local kind = BaseItemTable[selected.kind]
+	local kind = GET_ITEM_KIND(selected.kind)
 
 	draw_item(req, x + INTERFACE_GRID, y + INTERFACE_GRID, selected_item, false, true, true)
 
 	-- border(req.render, x + INTERFACE_GRID, y + INTERFACE_GRID * 8, INTERFACE_GRID * 32, INTERFACE_GRID * 6)
 	-- border(req.render, x + INTERFACE_GRID, y + INTERFACE_GRID * 14, INTERFACE_GRID * 32, INTERFACE_GRID * 6)
-
 
 	if req.render then
 		love.graphics.setColor(0, 0, 0, 1)
@@ -679,13 +479,15 @@ local function display_item_description(req, x, y)
 		love.graphics.printf(values.get_magic_damage(selected_item), x + INTERFACE_GRID * 18, y + INTERFACE_GRID * 10, INTERFACE_GRID * 14, "right")
 	end
 
-	if selected.equipped then
-		if button(req.render, "Unequip", x + INTERFACE_GRID * (8 ), y + INTERFACE_GRID * (1), INTERFACE_GRID * 10, INTERFACE_GRID * 3, req.mx, req.my) then
-			unequip_item(selected_item)
-		end
-	else
-		if button(req.render, "Equip", x + INTERFACE_GRID * (8), y + INTERFACE_GRID * (1), INTERFACE_GRID * 10, INTERFACE_GRID * 3, req.mx, req.my) then
-			equip_item(selected_item)
+	if kind.slot ~= ItemSlot.None then
+		if selected.equipped then
+			if button(req.render, "Unequip", x + INTERFACE_GRID * (8 ), y + INTERFACE_GRID * (1), INTERFACE_GRID * 10, INTERFACE_GRID * 3, req.mx, req.my) then
+				unequip_item(selected_item)
+			end
+		else
+			if button(req.render, "Equip", x + INTERFACE_GRID * (8), y + INTERFACE_GRID * (1), INTERFACE_GRID * 10, INTERFACE_GRID * 3, req.mx, req.my) then
+				equip_item(selected_item)
+			end
 		end
 	end
 
@@ -835,20 +637,190 @@ local function map(req, x, y)
 			love.graphics.draw(blob, loc_x - blob_x / 2 / 5, loc_y - blob_y / 2 / 5, 0, 1 / 5, 1 / 5)
 		end
 
+		local cur = player_state.location
+		if cur and Roads[player_state.location] then
+			for index, other in ipairs(Roads[cur]) do
+				local value = Locations[other]
+				local loc_x = x + value.x - map_view_origin_x
+				local loc_y = y + value.y - map_view_origin_y
+				love.graphics.setColor(1, 1, 1, 0.5)
+				love.graphics.circle("fill", loc_x, loc_y, value.display_radius)
+				love.graphics.setColor(1, 1, 1, math.max(location_highlights[other], location_highlights[cur] / 2))
+				love.graphics.draw(blob, loc_x - blob_x / 2 / 5, loc_y - blob_y / 2 / 5, 0, 1 / 5, 1 / 5)
+			end
+		end
+
 		for index, value in ipairs(Locations) do
 			local loc_x = x + value.x - map_view_origin_x
 			local loc_y = y + value.y - map_view_origin_y
-			love.graphics.setColor(1, 1, 1)
-			love.graphics.circle("fill", loc_x, loc_y, value.display_radius)
+			love.graphics.setColor(1, 1, 1, 0.75)
+			love.graphics.circle("fill", loc_x, loc_y, value.display_radius / 2)
 			love.graphics.setColor(1, 1, 1, location_highlights[index])
 			love.graphics.draw(blob, loc_x - blob_x / 2 / 5, loc_y - blob_y / 2 / 5, 0, 1 / 5, 1 / 5)
+
+			if circle_detection(x + value.x - map_view_origin_x, y + value.y - map_view_origin_y, value.display_radius * 2, req.mx, req.my) then
+				location_highlights[index] = math.max(0.5, location_highlights[index])
+			end
 		end
 	else
 		for index, value in ipairs(Locations) do
-			if circle_detection(x + value.x - map_view_origin_x, value.display_radius * 2, y + value.y - map_view_origin_y, req.mx, req.my) then
-
+			if circle_detection(x + value.x - map_view_origin_x, y + value.y - map_view_origin_y, value.display_radius * 2, req.mx, req.my) then
+				location_highlights[index] = 1
 			end
 		end
+	end
+end
+
+---comment
+---@param r Recipe
+---@return boolean
+local function can_do_recipe(r)
+	for index, value in ipairs(r.inputs) do
+		if player_state.inventory[value.value] < r.inputs_amount[index] then
+			return false
+		end
+	end
+
+	for index, value in ipairs(r.inputs_items) do
+		local found = false
+		for candidate, item_index in ipairs(player_state.stash) do
+			local item = RETRIEVE_ITEM(item_index)
+			if item == nil then
+				goto continue
+			end
+			if value.value == item.kind.value and item.durability > 0 then
+				found = true
+			end
+			::continue::
+		end
+		if not found then
+			return false
+		end
+	end
+
+	if r.required_weapon then
+		local current_tool = RETRIEVE_ITEM(player_state.weapon)
+		if current_tool then
+			local current_tool_kind = current_tool.kind
+			if r.required_weapon.value ~= current_tool_kind.value then
+				return false
+			end
+		else
+			return false
+		end
+	end
+
+	return true
+end
+
+---@param r Recipe
+---@return boolean
+local function know_recipe(r)
+	---@diagnostic disable-next-line: no-unknown
+	for key, value in pairs(r.skill_required) do
+		if value > player_state.mastery[key] then
+			return false
+		end
+	end
+
+	return true
+end
+
+---@param r Recipe
+local function execute_recipe(r)
+	assert(can_do_recipe(r))
+
+	for index, value in ipairs(r.inputs) do
+		player_state.inventory[value.value] = player_state.inventory[value.value] - r.inputs_amount[index]
+	end
+
+	for index, value in ipairs(r.inputs_items) do
+		for candidate, item_index in ipairs(player_state.stash) do
+			local item = RETRIEVE_ITEM(item_index)
+			if item and value.value == item.kind.value then
+				item.durability = 0
+				break
+			end
+		end
+	end
+
+	for index, value in ipairs(r.outputs) do
+		player_state.inventory[value.value] = player_state.inventory[value.value] + r.outputs_amount[index]
+	end
+
+	for index, value in ipairs(r.outputs_items) do
+		---@type Item
+		local fresh_item = {
+			affixes = {},
+			cooldown = 0,
+			durability = 1,
+			equipped = false,
+			highlight_opacity = 1,
+			invalid = false,
+			kind = value
+		}
+		local idx = CREATE_ITEM(fresh_item)
+
+		table.insert(player_state.stash, idx)
+	end
+end
+
+---comment
+---@param req InterfaceRequest
+---@param x number
+---@param y number
+---@param r Recipe
+local function draw_recipe(req, x, y, r)
+	if button(req.render, r.name, x, y, INTERFACE_GRID * 20, INTERFACE_GRID * 6, req.mx, req.my) then
+		execute_recipe(r)
+	end
+end
+
+local function camp(req, x, y)
+	local grid_row = 0
+	local grid_column = 0
+
+	for index, value in ipairs(Recipes) do
+		if not know_recipe(value) or not can_do_recipe(value) then
+			goto continue
+		end
+		draw_recipe(req, x + grid_column * INTERFACE_GRID * 20, y + grid_row * INTERFACE_GRID * 6, value)
+
+		grid_column = grid_column + 1
+		if grid_column > 3 then
+			grid_column = 0
+			grid_row = grid_row + 1
+		end
+
+		::continue::
+	end
+
+	for index, value in ipairs(Resources) do
+		if player_state.inventory[index] == 0 then
+			goto continue
+		end
+
+		if value.restore_hp == nil and value.restore_shield == nil then
+			goto continue
+		end
+
+		if button(req.render, "Consume " .. value.name, x + grid_column * INTERFACE_GRID * 20, y + grid_row * INTERFACE_GRID * 6, INTERFACE_GRID * 20, INTERFACE_GRID * 6, req.mx, req.my) then
+			player_state.inventory[index] = player_state.inventory[index] - 1
+			if value.restore_hp then
+				player_state.hp = math.min(player_state.hp + value.restore_hp, player_state.hp_max)
+			end
+			if value.restore_shield then
+				player_state.shield = player_state.shield + value.restore_shield
+			end
+		end
+
+		grid_column = grid_column + 1
+		if grid_column > 3 then
+			grid_column = 0
+			grid_row = grid_row + 1
+		end
+
+		::continue::
 	end
 end
 
@@ -883,15 +855,18 @@ local function map_control(req, x, y)
 		local button_y = y + INTERFACE_GRID
 		for index, value in ipairs(Roads[loc_id]) do
 			local next_destination = Locations[value]
-			if button(req.render, next_destination.name, button_x, button_y, INTERFACE_GRID * 20, INTERFACE_GRID *3, req.mx, req.my) then
+			if button(req.render, next_destination.name, button_x, button_y, INTERFACE_GRID * 35, INTERFACE_GRID *3, req.mx, req.my) then
 				-- TODO: non-instant movement
 				player_state.location = value
+			end
+			if rect_detection(button_x, button_y, INTERFACE_GRID * 40, INTERFACE_GRID *3, req.mx, req.my) then
+				location_highlights[value] = 1
 			end
 			button_y = button_y + INTERFACE_GRID * 3
 		end
 	else
 		-- panel(req.render, x + INTERFACE_GRID * (25 + 1), y + INTERFACE_GRID, INTERFACE_GRID * 20, INTERFACE_GRID * 21)
-		if button(req.render, "Clean up the location", x + INTERFACE_GRID * (25 + 1), y + INTERFACE_GRID, INTERFACE_GRID * 20, INTERFACE_GRID * 21, req.mx, req.my) then
+		if button(req.render, "Clean up the location", x + INTERFACE_GRID * (25 + 1), y + INTERFACE_GRID, INTERFACE_GRID * 35, INTERFACE_GRID * 21, req.mx, req.my) then
 			if cur_data.basic_armies > 0 then
 				battle_scene.generate_enemies(player_state, stage, player_state.location, false)
 			else
@@ -900,6 +875,10 @@ local function map_control(req, x, y)
 			player_state.model.position = 0
 			start_transition(SceneEnum.Battle)
 		end
+	end
+
+	if button (req.render, "Return to camp", x + INTERFACE_GRID * (25 + 1 + 35 + 1), y + INTERFACE_GRID, INTERFACE_GRID * 21, INTERFACE_GRID *3, req.mx, req.my) then
+		start_transition(SceneEnum.Camp)
 	end
 end
 
@@ -921,22 +900,39 @@ local function  interface(req)
 		panel(req.render, INTERFACE_GRID, INTERFACE_GRID, INTERFACE_GRID * 88, INTERFACE_GRID * 71, true)
 
 		if button(req.render, "Start new game", INTERFACE_GRID * 2, INTERFACE_GRID * 2, INTERFACE_GRID * 20, INTERFACE_GRID * 4, req.mx, req.my) then
-			reset_player(player_state, basic_hero)
+			reset_player(player_state, player_state.model_description)
 			assert(player_state.location)
 			start_transition(SceneEnum.Map)
 		end
 	elseif  scene ==SceneEnum.Map then
 		map(req, INTERFACE_GRID, INTERFACE_GRID)
-		border(req.render, INTERFACE_GRID, INTERFACE_GRID, INTERFACE_GRID * 88, INTERFACE_GRID * 71)
 	elseif  scene ==SceneEnum.Battle then
 		battle_scene.top(req, INTERFACE_GRID, INTERFACE_GRID, player_state, vfx_manager, stage)
-		border(req.render, INTERFACE_GRID, INTERFACE_GRID, INTERFACE_GRID * 88, INTERFACE_GRID * 71)
+	elseif scene == SceneEnum.Camp then
+		panel(req.render, INTERFACE_GRID, INTERFACE_GRID, INTERFACE_GRID * 88, INTERFACE_GRID * 71, true)
+		camp(req, INTERFACE_GRID, INTERFACE_GRID)
 	end
 
+	border(req.render, INTERFACE_GRID, INTERFACE_GRID, INTERFACE_GRID * 88, INTERFACE_GRID * 71)
 	panel(req.render, INTERFACE_GRID, INTERFACE_GRID * 73, INTERFACE_GRID * 88, INTERFACE_GRID * 23, true)
 
 	if scene ==SceneEnum.Map then
 		map_control(req, INTERFACE_GRID, INTERFACE_GRID * 73)
+	elseif scene == SceneEnum.Camp then
+		if button(req.render, "Back to map", INTERFACE_GRID * 2, INTERFACE_GRID * 74, INTERFACE_GRID * 16, INTERFACE_GRID * 3, req.mx, req.my) then
+			start_transition(SceneEnum.Map)
+		end
+
+		if req.render then
+			---@type string
+			local inventory = "Current inventory:\n"
+			for index, value in ipairs(player_state.inventory) do
+				inventory = inventory .. tostring(value) .. " " .. Resources[index].name .. "\t"
+			end
+			panel(req.render, INTERFACE_GRID * 19, INTERFACE_GRID * 74, INTERFACE_GRID * 50, INTERFACE_GRID * 20)
+			style.dense_information_font()
+			love.graphics.printf(inventory, INTERFACE_GRID * 20, INTERFACE_GRID * 75, INTERFACE_GRID * 48, "left")
+		end
 	end
 
 	love.graphics.setColor(0, 0, 0, fade_progress)
@@ -1026,6 +1022,9 @@ function love.update(dt)
 	for index, value in ipairs(ITEM_DB.data_array) do
 		value.highlight_opacity = math.max(value.highlight_opacity - dt, 0)
 	end
+	for index, value in ipairs(location_highlights) do
+		location_highlights[index] = math.max(value - dt, 0)
+	end
 	for index, value in ipairs(vfx_manager.particles) do
 		value.time_left = value.time_left - dt
 	end
@@ -1046,7 +1045,7 @@ function love.update(dt)
 			fade_in = false
 			scene = transition_to_scene
 			if scene == SceneEnum.MainMenu and player_state.hp <= 0 then
-				reset_player(player_state, basic_hero)
+				reset_player(player_state, player_state.model_description)
 			end
 		end
 	end

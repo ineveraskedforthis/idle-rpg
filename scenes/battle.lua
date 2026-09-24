@@ -399,7 +399,8 @@ function battle_scene.generate_enemies(player, stage, location_index, elite)
 			mastery = {
 				general_magic = prot.spell_experience,
 				melee_defense = prot.attack_experience,
-				melee_weapon = prot.attack_experience
+				melee_weapon = prot.attack_experience,
+				cooking = 0
 			},
 			melee_damage = prot.base_damage,
 			mental = {
@@ -424,7 +425,11 @@ function battle_scene.generate_enemies(player, stage, location_index, elite)
 			boots = INVALID_ITEM_INDEX,
 			location = location_index,
 			on_kill_triggered = false,
-			is_enemy = true
+			is_enemy = true,
+			inventory = {},
+			loot_amount = prot.loot_amount,
+			loot_items = prot.loot_items,
+			loot_resources = prot.loot_resources
 		}
 		table.insert(stage.enemies, starting_enemy)
 	end

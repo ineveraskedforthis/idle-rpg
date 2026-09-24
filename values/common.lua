@@ -24,7 +24,7 @@ function t.get_shield(item)
 	if not w then
 		return 0
 	end
-	local b = BaseItemTable[w.kind]
+	local b = GET_ITEM_KIND(w.kind)
 	result = result + b.shield
 	for index, value in ipairs(w.affixes) do
 		result = result + AffixTable[value.affix_index].shield * value.amount
@@ -42,7 +42,7 @@ function t.get_melee_damage(item)
 	if not w then
 		return 0
 	end
-	local b = BaseItemTable[w.kind]
+	local b = GET_ITEM_KIND(w.kind)
 	result = result + b.damage
 	for index, value in ipairs(w.affixes) do
 		result = result + AffixTable[value.affix_index].melee_damage * value.amount
@@ -60,7 +60,7 @@ function t.get_magic_damage(item)
 	if not w then
 		return 0
 	end
-	local b = BaseItemTable[w.kind]
+	local b = GET_ITEM_KIND(w.kind)
 	result = result + b.damage
 	for index, value in ipairs(w.affixes) do
 		result = result + AffixTable[value.affix_index].magic_damage * value.amount
@@ -78,7 +78,7 @@ function t.get_speed_mod(item)
 	if not w then
 		return 0
 	end
-	local b = BaseItemTable[w.kind]
+	local b = GET_ITEM_KIND(w.kind)
 	result = result + b.speed_modifier
 	for index, value in ipairs(w.affixes) do
 		result = result + AffixTable[value.affix_index].speed_modifier * value.amount

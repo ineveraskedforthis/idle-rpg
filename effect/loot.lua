@@ -1,4 +1,4 @@
-
+--[[
 ---comment
 ---@param item Item
 ---@param affix ItemAffix
@@ -22,7 +22,9 @@ end
 local function generate_loot(rarity)
 	---@type Item
 	local item = {
-		kind = math.floor(#BaseItemTable *love.math.random()) + 1,
+		kind = {
+			value = math.floor(#BaseItemTable *love.math.random()) + 1
+		},
 		affixes = {},
 		durability = 1,
 		equipped = false,
@@ -80,22 +82,45 @@ local function generate_loot(rarity)
 
 	return item_index
 end
+--]]
 
----@param state ActorState
+
+---@param killer ActorState
 ---@param enemy ActorState
-local function loot_enemy(state, enemy)
-	local inventory = 0
-	for index, value in ipairs(state.stash) do
-		local item = RETRIEVE_ITEM(value)
-		if item and not item.equipped then
-			inventory = inventory + 1
-		end
+local function loot_enemy(killer, enemy)
+	-- local inventory = 0
+	-- for index, value in ipairs(state.stash) do
+	-- 	local item = RETRIEVE_ITEM(value)
+	-- 	if item and not item.equipped then
+	-- 		inventory = inventory + 1
+	-- 	end
+	-- end
+	-- if love.math.random() < 0.33 and inventory < 15 then
+	-- 	local item = generate_loot(love.math.random() * (1 + 10 * MASTERY_TO_SKILL (enemy.mastery.general_magic + enemy.mastery.melee_weapon + enemy.mastery.melee_defense) + enemy.melee_damage / 2 + enemy.spell_damage / 2))
+	-- 	table.insert(state.stash, item)
+	-- 	return item
+	-- end
+
+	for index, value in ipairs(enemy.loot_items) do
+		-- local looted_kind = BaseItemTable[value.value]
+		---@type Item
+		local item = {
+			kind = value,
+			affixes = {},
+			cooldown = 0,
+			durability = 1,
+			equipped = false,
+			highlight_opacity = 0,
+			invalid = false
+		}
+		local item_index = CREATE_ITEM(item)
+		table.insert(killer.stash, item_index)
 	end
-	if love.math.random() < 0.33 and inventory < 15 then
-		local item = generate_loot(love.math.random() * (1 + 10 * MASTERY_TO_SKILL (enemy.mastery.general_magic + enemy.mastery.melee_weapon + enemy.mastery.melee_defense) + enemy.melee_damage / 2 + enemy.spell_damage / 2))
-		table.insert(state.stash, item)
-		return item
+
+	for index, id in ipairs(enemy.loot_resources) do
+		killer.loot_resources[id.value] = killer.loot_resources[id.value] + enemy.loot_amount[id.value]
 	end
+
 	return nil
 end
 

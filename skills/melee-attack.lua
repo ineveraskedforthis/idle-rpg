@@ -13,7 +13,7 @@ local description = {
 		local attack_range = 10
 		local weapon = RETRIEVE_ITEM(player.weapon)
 		if weapon then
-			local b = BaseItemTable[weapon.kind]
+			local b = GET_ITEM_KIND(weapon.kind)
 			attack_range = b.range
 		end
 		return attack_range / 2 + player.model_description.size_x / 2 * player.model_description.image_base_scale
@@ -43,7 +43,7 @@ local description = {
 		local attack_range = 10 + model_description.size_x / 2
 		local weapon = RETRIEVE_ITEM(player.weapon)
 		if weapon then
-			local b = BaseItemTable[weapon.kind]
+			local b = GET_ITEM_KIND(weapon.kind)
 			attack_range = b.range + model_description.size_x / 2 *model_description.image_base_scale
 		end
 

@@ -34,6 +34,9 @@
 ---@field spell_defense number
 ---@field model_description ActorModelDescription
 ---@field speed number
+---@field loot_resources ResourceIndex[]
+---@field loot_amount number[]
+---@field loot_items ItemKindIndex[]
 
 ---@class (exact) ArmyComposition
 ---@field unit EnemyPrototype
@@ -58,6 +61,7 @@
 ---@field basic_armies number
 ---@field elite_armies number
 ---@field background love.Image
+---@field local_characters ActorState[]
 
 ---@class (exact) LocationState
 ---@field controlled_by number
@@ -68,6 +72,7 @@
 ---@field melee_weapon number
 ---@field melee_defense number
 ---@field general_magic number
+---@field cooking number
 
 ---@class (exact) MentalState
 ---@field learning_speed number
@@ -96,6 +101,11 @@
 ---@field speed number
 ---@field on_kill_triggered boolean
 ---@field is_enemy boolean
+---@field inventory number[]
+---@field loot_resources ResourceIndex[]
+---@field loot_amount number[]
+---@field loot_items ItemKindIndex[]
+---@field faction number|nil
 
 --[[
 ---@class (exact) Enemy
@@ -137,6 +147,20 @@
 ---@field projectiles Projectile[]
 ---@field is_elite boolean
 
+---@class (exact) Resource
+---@field name string
+---@field restore_hp number|nil
+---@field restore_shield number|nil
+
+---@class (exact) ItemKindIndex
+---@field value number
+
+---@class (exact) RecipeIndex
+---@field value number
+
+---@class (exact) ResourceIndex
+---@field value number
+
 ---@class (exact) ItemKind
 ---@field name string
 ---@field image love.Image
@@ -148,6 +172,18 @@
 ---@field range number
 ---@field image_kind ItemImageSize
 
+---@class (exact) Recipe
+---@field name string
+---@field outputs_items ItemKindIndex[]
+---@field outputs ResourceIndex[]
+---@field outputs_amount number[]
+---@field inputs ResourceIndex[]
+---@field inputs_amount number[]
+---@field inputs_items ItemKindIndex[]
+---@field required_weapon ItemKindIndex|nil
+---@field required_weapon_durability_loss number
+---@field skill_required MasteryState
+---@field skill_improvement MasteryState
 
 ---@class (exact) ItemAffix
 ---@field name string
@@ -169,14 +205,13 @@
 ---@field affix_index number
 
 ---@class (exact) Item
----@field kind number
+---@field kind ItemKindIndex
 ---@field affixes AffixInstance[]
 ---@field durability number
 ---@field cooldown number
 ---@field highlight_opacity number
 ---@field equipped boolean
 ---@field invalid boolean
-
 
 
 ---@class (exact) ActorModelDescription
@@ -233,7 +268,8 @@ ActorModelStateEnum = {
 ItemSlot = {
 	Boots = 1,
 	Weapon = 2,
-	Ring = 3
+	Ring = 3,
+	None = 4,
 }
 
 ---@enum ItemImageSize
