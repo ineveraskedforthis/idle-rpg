@@ -126,8 +126,9 @@ function economy_table.load_economy()
 		restore_shield = 100
 	})
 
-	local Boots = register_boots("Boots", love.graphics.newImage("boots.png"), 1.1, 5)
-	local Knife = register_weapon("Knife", love.graphics.newImage("knife.png"), 2, 2.25, 0)
+	local Boots = register_boots("Boots (Rat)", love.graphics.newImage("boots.png"), 1.1, 5)
+	local Knife = register_weapon("Knife (Steel)", love.graphics.newImage("assets/items/knife.png"), 4, 2.25, 0)
+	local RatFangWeapon = register_weapon("Fang (Rat)", love.graphics.newImage("assets/items/fang-rat.png"), 2, 2.25, 0)
 	local Ring = register_ring("Ring", love.graphics.newImage("ring.png"), 5)
 	local RatBody = register_item {
 		base_attack_speed = 0,
@@ -187,7 +188,30 @@ function economy_table.load_economy()
 			melee_defense = 0,
 			melee_weapon = 0,
 		},
-		required_tool_durability_loss = 0
+	})
+
+	local process_fang = create_recipe ({
+		name = "Rat fang into a weapon",
+		inputs = {RatFang},
+		inputs_amount = {1},
+		inputs_items = {},
+		outputs = {},
+		outputs_amount = {},
+		outputs_items = {RatFangWeapon},
+		required_weapon = nil,
+		required_weapon_durability_loss = 0,
+		skill_improvement = {
+			cooking = 0,
+			general_magic = 0,
+			melee_defense = 0,
+			melee_weapon = 0
+		},
+		skill_required = {
+			cooking = 0,
+			general_magic = 0,
+			melee_defense = 0,
+			melee_weapon = 0,
+		},
 	})
 
 	economy_table.rat_body = RatBody
