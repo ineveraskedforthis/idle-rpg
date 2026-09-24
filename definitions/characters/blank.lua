@@ -24,7 +24,9 @@ return function ()
 			kind = ActionEnum.Nothing,
 			progress = 0,
 			used_item = INVALID_ITEM_INDEX,
-			used_skill = nil
+			used_skill = nil,
+			expected_time = 0,
+			strength = 0
 		},
 		hp = BASE_MAX_HP,
 		hp_max = BASE_MAX_HP,

@@ -1080,7 +1080,7 @@ local function  interface(req)
 
 		if req.render then
 			---@type string
-			local inventory = "Current inventory:\n"
+			local inventory = "Coins:  " .. tostring (player_state.coins) .. "\nCurrent inventory:\n"
 			for index, value in ipairs(player_state.inventory) do
 				inventory = inventory .. tostring(value) .. " " .. Resources[index].name .. "\t"
 			end

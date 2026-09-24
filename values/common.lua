@@ -54,14 +54,12 @@ end
 ---@param item ItemIndex
 ---@return integer
 function t.get_magic_damage(item)
-	---@type number
-	local result = 0
 	local w = RETRIEVE_ITEM(item)
 	if not w then
 		return 0
 	end
-	local b = GET_ITEM_KIND(w.kind)
-	result = result + b.damage
+	---@type number
+	local result = 0
 	for index, value in ipairs(w.affixes) do
 		result = result + AffixTable[value.affix_index].magic_damage * value.amount
 	end

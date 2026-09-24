@@ -23,7 +23,9 @@
 ---@field used_skill SkillEnum?
 ---@field used_item ItemIndex
 ---@field progress number
+---@field strength number
 ---@field completed boolean
+---@field expected_time number
 
 ---@class (exact) EnemyPrototype
 ---@field hp_max number
@@ -257,7 +259,8 @@ MouseButton = {
 ActionEnum = {
 	Nothing = 1,
 	ActivateSkill = 2,
-	ActivateItem = 3
+	ActivateItem = 3,
+	KnockedBack = 4,
 }
 
 

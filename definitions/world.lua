@@ -36,9 +36,9 @@ function w.load(economy)
 	local big_rat_image =love.graphics.newImage("assets/rat-big/base.png")
 	---@type EnemyPrototype
 	local large_rat = {
-		attack_skill = 0.01,
-		hp_max = 5,
-		melee_defense = 0.01,
+		attack_skill = 0,
+		hp_max = 15,
+		melee_defense = 0,
 		spell_defense = 0,
 		model_description = {
 			size_x = 300,
@@ -53,7 +53,7 @@ function w.load(economy)
 			attack_timer_mult = 1 / 100,
 		},
 		base_damage = 1,
-		attack_experience = 0.1,
+		attack_experience = 0,
 		speed = 200,
 		spell_experience = 0,
 		loot_items = {economy.rat_body},

@@ -33,6 +33,8 @@ return function (player, model_description)
 		used_skill = nil,
 		progress = 0,
 		completed = true,
+		expected_time = 0,
+		strength = 0
 	}
 	player.items_queue = {}
 	player.weapon = INVALID_ITEM_INDEX

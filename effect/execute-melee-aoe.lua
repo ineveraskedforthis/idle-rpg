@@ -1,4 +1,5 @@
 local insert_particle = require "effect-visual.particle"
+local knock_back = require "effect.knock-back"
 
 local blood_hit_image = love.graphics.newImage("assets/effects/blood-hit.png")
 local blood_ground_image = love.graphics.newImage("assets/effects/blood-ground.png")
@@ -28,31 +29,34 @@ return function (vfx, stage, left_x, right_x, damage_value, attacker)
 			local skill = MASTERY_TO_SKILL(attacker.mastery.melee_weapon)
 
 			local skill_diff = skill - difficulty
-			local success_probability = skill_diff / 0.1 + 0.5
+			local success_probability = skill_diff / 0.1
+			local critical_success_probability = skill_diff / 0.1 - 0.5
 
 			-- print(success_probability, damage_value)
 			local success = love.math.random() < success_probability
+			local critical_success = false
+			if success then
+				critical_success = love.math.random() < critical_success_probability
+			end
 
 			local actual_damage = damage_value
 			if success then
-				actual_damage = damage_value * 10
+				actual_damage = damage_value * 2
+				if critical_success then
+					actual_damage = damage_value * 5
+				end
+				value.mastery.melee_defense = value.mastery.melee_defense + value.mental.learning_speed * 2
 			else
 				attacker.mastery.melee_weapon = attacker.mastery.melee_weapon + attacker.mental.learning_speed
 			end
 
 			value.hp = value.hp - actual_damage
+			value.mastery.melee_defense = value.mastery.melee_defense + value.mental.learning_speed
 
-			value.current_action.progress = 0
-			value.current_action.kind =ActionEnum.Nothing
-			value.current_action.used_skill = nil
-			value.current_action.completed = true
+			if critical_success then
+				knock_back(value, attacker.model_description.size_x * attacker.model_description.image_base_scale)
+			end
 
-			-- value.being_hit = true
-			-- value.being_hit_animation_progress = 0
-			value.model.position = math.min(
-				stage.distance,
-				value.model.position + attacker.model_description.size_x * attacker.model_description.image_base_scale / 2 * orientation
-			)
 			if success then
 				insert_particle(vfx, value.model.position + 0.1 * (love.math.random() - 0.5), 1 + love.math.random(), blood_ground_image, 4)
 			else

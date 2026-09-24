@@ -108,7 +108,7 @@ return function (x, y, w, h, hp, hp_view, max_hp, shield, style)
 		local _h = h - 2 * margin
 
 		-- draw inner border color lines to show hp blocks for every X hp:
-		local blocks = max_hp / 200
+		local blocks = max_hp / 5
 		local block_size = _w / blocks
 		for i = 1, blocks do
 			love.graphics.rectangle("fill", _x + i * block_size, _y, 1, _h)

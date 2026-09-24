@@ -261,7 +261,9 @@ local function schedule_item_action (player, item)
 		completed = false,
 		progress = 0,
 		kind = ActionEnum.ActivateItem,
-		used_item = item
+		used_item = item,
+		expected_time = 0,
+		strength = 0
 	}
 	table.insert(player.items_queue, action)
 end
@@ -420,7 +422,13 @@ local function update_actor(dt, vfx, stage, actor_index, allies, enemies)
 	local action = actor.current_action
 
 	actor.model.state = ActorModelStateEnum.Idle
-	if action.kind == ActionEnum.Nothing then
+	if action.kind == ActionEnum.KnockedBack then
+		actor.model.position = math.min(stage.distance, actor.model.position - actor.model.orientation * action.strength * dt)
+		action.strength = math.max(action.strength * math.exp(-dt * 10) - dt, 0)
+		if action.strength == 0 then
+			reset_action(actor)
+		end
+	elseif action.kind == ActionEnum.Nothing then
 		-- Can we do a basic attack?
 		local action_chosen = false
 		for index, value in ipairs(enemies) do

@@ -1,7 +1,7 @@
 
 ---@param x number
 function MASTERY_TO_SKILL (x)
-	return (1 - math.pow(2, -x)) * x / 100 / (1 + x * 100)
+	return (1 - math.pow(2, -x)) * x / 100 / (1 + x / 100)
 end
 
 function CLAMP(x, a, b)

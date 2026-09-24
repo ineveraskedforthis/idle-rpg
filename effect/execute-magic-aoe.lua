@@ -1,4 +1,6 @@
 local insert_particle = require "effect-visual.particle"
+local knock_back = require "effect.knock-back"
+
 
 local magic_particle = love.graphics.newImage("assets/effects/magic-particle.png")
 local blood_ground_image = love.graphics.newImage("assets/effects/blood-ground.png")
@@ -23,7 +25,7 @@ return function (vfx, stage, left_x, right_x, damage_value, attacker)
 			local skill = MASTERY_TO_SKILL(attacker.mastery.general_magic)
 
 			local skill_diff = skill - difficulty
-			local success_probability = skill_diff / 0.1 + 0.5
+			local success_probability = skill_diff / 0.1
 			local success = love.math.random() < success_probability
 
 			local actual_damage = damage_value
@@ -34,6 +36,10 @@ return function (vfx, stage, left_x, right_x, damage_value, attacker)
 			end
 
 			value.hp = value.hp - actual_damage
+
+			if success then
+				knock_back(value, damage_value)
+			end
 
 			-- value.being_hit = true
 			-- value.being_hit_animation_progress = 0
